@@ -1,0 +1,19 @@
+Flask==3.0.3
+python-dotenv==1.0.1
+requests==2.32.3
+
+# YouTube transcripts + splitting
+youtube-transcript-api==0.6.2
+tiktoken==0.7.0
+langchain-text-splitters==0.2.2
+
+# Embeddings (local, free)
+sentence-transformers==3.0.1
+numpy==1.26.4
+
+# (Generator later) Gemini via LangChain
+langchain-google-genai==2.0.4
+google-generativeai==0.8.2
+
+# Vector DB later (optional, keep for pipeline)
+pinecone-client==5.0.1

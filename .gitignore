@@ -1,0 +1,70 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+env/
+venv/
+ENV/
+.venv*/
+pip-wheel-metadata/
+dist/
+build/
+
+# === Environment & Secrets ===
+.env
+.env.*
+!.env.example
+
+# === VS Code ===
+.vscode/
+.history/
+
+# === macOS / Windows ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Logs & temp files ===
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# === Jupyter / experiments ===
+.ipynb_checkpoints/
+*.ipynb
+
+# === Compiled / C extensions ===
+*.so
+*.dll
+*.dylib
+*.pyd
+
+# === Cache ===
+.cache/
+.pytest_cache/
+__pypackages__/
+.mypy_cache/
+coverage/
+htmlcov/
+.tox/
+.nox/
+
+# === Node / frontend (if you add Next.js later) ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.next/
+out/
+
+# === Artifacts / generated content ===
+*.pptx
+*.pdf
+*.csv
+*.json
+artifacts/
