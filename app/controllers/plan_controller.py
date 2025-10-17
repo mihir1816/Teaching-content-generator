@@ -1,5 +1,5 @@
 from flask import jsonify, request
-from services.generate_plan import generate_plan
+from app.services.generate_plan import generate_plan
 
 def generate_plan_controller():
     try:
