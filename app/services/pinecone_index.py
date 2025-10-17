@@ -11,9 +11,8 @@ except ImportError as e:
         "Pinecone client v5 is required. Install it with:\n  pip install pinecone-client==5.0.1"
     ) from e
 
-
 # --- Constants (MiniLM embedding dim = 384) ----------------------------------
-EMBED_DIM = 384
+EMBED_DIM = 384 
 DEFAULT_METRIC = "cosine"
 
 # --- Client + Index helpers ---------------------------------------------------
