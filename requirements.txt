@@ -64,3 +64,8 @@ google-generativeai
 pinecone
 
 flask-cors
+
+# Web scraping for articles
+langchain-community
+beautifulsoup4
+lxml
