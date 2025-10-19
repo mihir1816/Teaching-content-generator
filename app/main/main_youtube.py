@@ -92,9 +92,9 @@ def run_pipeline(
     # 5) Generate retrieval queries from your plan string (Gemini)
     print(">>> Generating retrieval queries from plan (Gemini) ...")
     queries = generate_queries_from_plan(plan_text, n=8)
+    print(f"    queries: {queries}")
     _save_json({"plan": plan_text, "queries": queries, "level": level, "style": style, "language": language},
                out_dir / f"{video_id}_plan_queries.json")
-    print(f"    queries: {queries}")
 
     # 6) Retrieve (dense RAG)
     print(">>> Retrieving top context (dense) ...")

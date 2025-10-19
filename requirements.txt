@@ -49,8 +49,12 @@ requests
 
 # YouTube transcripts + splitting
 youtube-transcript-api
+langdetect 
+pytube
 tiktoken
 langchain-text-splitters
+langchain-core
+deep-translator
 
 # Embeddings (local, free)
 sentence-transformers

@@ -35,7 +35,7 @@ MMR_LAMBDA = 0.5
 # ==== Translation (LibreTranslate) ====
 LT_URL = os.environ.get("LT_URL", "https://libretranslate.com")
 LT_API_KEY = os.environ.get("LT_API_KEY", "")
-PREFERRED_LANGUAGE = "en"  # always prefer English
+PREFERRED_LANGUAGE = "en" 
 
 # Pinecone serverless location (edit if needed)
 PINECONE_CLOUD = "aws"
