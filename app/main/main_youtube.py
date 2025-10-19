@@ -105,7 +105,7 @@ def run_pipeline(
         final_k=final_k,
         include_text=True,
     )
-    print(f"    fused hits: {len(hits)}")
+    print(f"fused hits: {len(hits)}")
 
     # 7) Generate Notes → Summary → MCQs (Gemini, no citations)
     topic_label = _infer_topic_from_plan(plan_text)

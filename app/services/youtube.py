@@ -66,6 +66,6 @@ def get_transcript_text(url_or_id: str) -> Dict[str, str]:
             "language": final_language,
             "text": text.strip(),
         }
-    
+
     except Exception as e:
         raise RuntimeError(f"Failed to fetch transcript: {e}") from e
