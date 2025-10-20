@@ -37,3 +37,5 @@ def generate_plan_controller():
             "success": False,
             "message": str(e)
         }), 500
+        
+        

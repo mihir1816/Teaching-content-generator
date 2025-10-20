@@ -17,12 +17,12 @@ except Exception as e:
 # =========================
 # System style (no citations)
 # =========================
-_SYSTEM_PROMPT = """You are “Classroom Coach”, a patient pedagogue who explains clearly and accurately.
+_SYSTEM_PROMPT = """You are "Classroom Coach", a patient pedagogue who explains clearly and accurately.
 
 PRINCIPLES:
 - Write as a supportive teacher: clear, structured, and concise.
 - Use only the Context Snippets given; do not assume outside knowledge.
-- If something is not in the context, avoid making it up; say “insufficient information.”
+- If something is not in the context, avoid making it up; say "insufficient information."
 - Do NOT include any citations, IDs, or references in the output.
 - Output MUST be valid JSON that matches the requested schema exactly, with no extra text.
 """
@@ -38,7 +38,7 @@ LANGUAGE: {language}
 
 INSTRUCTIONS:
 - Produce high-quality content tailored to LEVEL and STYLE.
-- Rely on Context Snippets. If information is missing, write “insufficient information.”
+- Rely on Context Snippets. If information is missing, write "insufficient information."
 - No citations or chunk IDs in the output.
 """
 
@@ -152,7 +152,7 @@ def _json_sanitize(s: str) -> Dict[str, Any]:
 # Public API
 # =========================
 def generate_all(
-    video_id: str,
+    namespace: str,
     topic: str,
     queries: List[str],
     level: str = "beginner",
@@ -165,20 +165,34 @@ def generate_all(
 ) -> Dict[str, Any]:
     """
     Produce all three objectives (notes, summary, mcqs) without any citations.
+    
+    Args:
+        namespace: Pinecone namespace (e.g., "video:abc123" or "article:example:hash")
+        topic: Topic label for the content
+        queries: List of retrieval queries
+        level: Difficulty level (beginner/intermediate/advanced)
+        style: Writing style (concise/detailed/exam-prep)
+        language: Output language code
+        final_k: Number of context chunks to retrieve
+        max_context_chars: Maximum characters for context
+        model_name: Gemini model name (defaults to config)
+        mcq_count: Number of MCQs to generate
+        
+    Returns: Dict with notes, summary, and mcqs
     """
     if not cfg.GOOGLE_API_KEY:
         raise RuntimeError("GOOGLE_API_KEY missing. Set it in your environment/.env.")
 
     # 1) Retrieve once using your simple dense RAG
     hits = retrieve_from_queries(
-        video_id=video_id,
+        namespace=namespace,
         queries=queries,
         per_query_k=5,
         final_k=final_k,
         include_text=True
     )
 
-    # If nothing retrieved, return “insufficient information” scaffolds
+    # If nothing retrieved, return "insufficient information" scaffolds
     if not hits:
         scaffold = {
             "topic": topic,

@@ -296,3 +296,6 @@ def run_pipeline(url: str, plan: dict) -> dict:
         import traceback
         logger.error(traceback.format_exc())
         raise
+    
+    
+    

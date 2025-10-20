@@ -18,6 +18,7 @@ from app.services.generator import generate_all
 import app.config as cfg
 
 
+
 def _ensure_dirs():
     Path(cfg.DATA_PATH).mkdir(parents=True, exist_ok=True)
     (Path(cfg.DATA_PATH) / "outputs").mkdir(parents=True, exist_ok=True)
@@ -78,40 +79,48 @@ def run_pipeline(
     dim = len(embedded[0]["vector"]) if embedded else 0
     print(f"    embedded: {len(embedded)}, dim: {dim}")
 
-    # 4) Index + upsert
+    # 4) Create namespace for this video
+    namespace = f"video:{video_id}"
+    print(f">>> Using namespace: {namespace}")
+
+    # 5) Index + upsert
     if reingest:
         print(">>> Ensuring Pinecone index & upserting ...")
         ensure_index()
-        count = upsert_chunks(video_id=video_id, embedded_chunks=embedded, batch_size=100)
-        print(f"    upserted: {count} into namespace: video:{video_id}")
+        count = upsert_chunks(
+            namespace=namespace,
+            embedded_chunks=embedded,
+            batch_size=100
+        )
+        print(f"    upserted: {count} vectors into namespace: {namespace}")
     else:
         print(">>> Skipping re-ingest (reingest=False).")
 
     out_dir = Path(cfg.DATA_PATH) / "outputs"
 
-    # 5) Generate retrieval queries from your plan string (Gemini)
+    # 6) Generate retrieval queries from your plan string (Gemini)
     print(">>> Generating retrieval queries from plan (Gemini) ...")
     queries = generate_queries_from_plan(plan_text, n=8)
     print(f"    queries: {queries}")
     _save_json({"plan": plan_text, "queries": queries, "level": level, "style": style, "language": language},
                out_dir / f"{video_id}_plan_queries.json")
 
-    # 6) Retrieve (dense RAG)
+    # 7) Retrieve (dense RAG)
     print(">>> Retrieving top context (dense) ...")
     hits = retrieve_from_queries(
-        video_id=video_id,
+        namespace=namespace,
         queries=queries,
         per_query_k=5,
         final_k=final_k,
         include_text=True,
     )
-    print(f"fused hits: {len(hits)}")
+    print(f"    fused hits: {len(hits)}")
 
-    # 7) Generate Notes → Summary → MCQs (Gemini, no citations)
+    # 8) Generate Notes → Summary → MCQs (Gemini, no citations)
     topic_label = _infer_topic_from_plan(plan_text)
     print(">>> Generating Notes, Summary, MCQs (Gemini) ...")
     result = generate_all(
-        video_id=video_id,
+        namespace=namespace,
         topic=topic_label,
         queries=queries,
         level=level,

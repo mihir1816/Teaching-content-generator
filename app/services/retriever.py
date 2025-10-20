@@ -29,7 +29,7 @@ def _rrf_fuse(ranked_lists: List[List[Dict[str, Any]]], k: int = 60) -> List[Dic
     return fused
 
 def retrieve_from_queries(
-    video_id: str,
+    namespace: str,
     queries: List[str],
     per_query_k: int = 5,
     final_k: int = 8,
@@ -38,6 +38,13 @@ def retrieve_from_queries(
     """
     Core entrypoint: take a list of teacher/LLM-generated queries,
     run dense retrieval per query, fuse with RRF, and return top 'final_k' chunks.
+    
+    Args:
+        namespace: Pinecone namespace (e.g., "video:abc123" or "article:example:hash")
+        queries: List of search queries
+        per_query_k: Number of results to retrieve per query
+        final_k: Final number of results to return after fusion
+        include_text: Whether to include text metadata in results
 
     Returns: [{"id","score","text"(optional)}...]
     """
@@ -47,13 +54,12 @@ def retrieve_from_queries(
     # 1) Embed queries locally (MiniLM; free)
     qvecs = embed_texts(queries)
 
-    # 2) Search Pinecone in per-video namespace
-    ns = f"video:{video_id}"
+    # 2) Search Pinecone in the provided namespace
     ranked_lists: List[List[Dict[str, Any]]] = []
     for qv in qvecs:
         hits = pinecone_query(
             vector=qv,
-            namespace=ns,
+            namespace=namespace,
             top_k=per_query_k,
             include_metadata=include_text,
         )

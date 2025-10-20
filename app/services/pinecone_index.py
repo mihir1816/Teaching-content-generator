@@ -52,16 +52,15 @@ def _get_index():
 
 # --- Upsert / Query / Delete --------------------------------------------------
 def upsert_chunks(
-    video_id: str,
+    namespace: str,
     embedded_chunks: List[Dict[str, Any]],
-    namespace: Optional[str] = None,
     batch_size: int = 100,
     store_text_metadata: bool = True,
 ) -> int:
     """
     Upsert vectors into Pinecone.
+    - namespace: The namespace to upsert into (e.g., "video:abc123" or "article:example:hash")
     - embedded_chunks: [{"id": "...", "text": "...", "vector": [...]}]
-    - namespace defaults to per-video: f"video:{video_id}"
     Returns: number of vectors upserted
     """
     if not embedded_chunks:
@@ -73,7 +72,6 @@ def upsert_chunks(
         if not isinstance(vec, (list, tuple)) or len(vec) != EMBED_DIM:
             raise ValueError(f"Vector dim mismatch (expected {EMBED_DIM}, got {len(vec) if vec is not None else 'None'})")
 
-    ns = namespace or f"video:{video_id}"
     index = _get_index()
 
     # batch and upsert
@@ -83,11 +81,11 @@ def upsert_chunks(
         meta = {"text": c["text"]} if store_text_metadata else None
         batch.append({"id": c["id"], "values": c["vector"], "metadata": meta})
         if len(batch) >= batch_size:
-            index.upsert(vectors=batch, namespace=ns)
+            index.upsert(vectors=batch, namespace=namespace)
             count += len(batch)
             batch = []
     if batch:
-        index.upsert(vectors=batch, namespace=ns)
+        index.upsert(vectors=batch, namespace=namespace)
         count += len(batch)
     return count
 
@@ -126,10 +124,10 @@ def query(
     return out
 
 
-def delete_by_video(video_id: str) -> None:
+def delete_namespace(namespace: str) -> None:
     """
-    Delete all vectors for a given video by wiping its namespace.
+    Delete all vectors in a given namespace.
+    Works for both video and article namespaces.
     """
-    ns = f"video:{video_id}"
     index = _get_index()
-    index.delete(delete_all=True, namespace=ns)
+    index.delete(delete_all=True, namespace=namespace)
