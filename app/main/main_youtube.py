@@ -14,6 +14,8 @@ from app.services.pinecone_index import ensure_index, upsert_chunks
 from app.services.generate_queries import generate_queries_from_plan
 from app.services.retriever import retrieve_from_queries
 from app.services.generator import generate_all
+from app.services.ppt_builder import build_ppt_from_result
+
 
 import app.config as cfg
 
@@ -129,6 +131,9 @@ def run_pipeline(
         model_name=getattr(cfg, "LLM_MODEL_NAME", "gemini-1.5-flash"),
         mcq_count=mcq_count,
     )
+    
+    ppt_path = build_ppt_from_result(result)
+
 
     _save_json(result, out_dir / f"{video_id}_results.json")
     print(f"    results saved -> {out_dir / (video_id + '_results.json')}")
