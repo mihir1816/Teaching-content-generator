@@ -1,7 +1,7 @@
 # app/controllers/pipeline_controller.py
 
 from flask import request, jsonify
-from app.main.main_topic_name import run_pipeline
+from app.main.main_topic_name import generate_content_from_plan
 
 def run_pipeline_controller():
     try:
@@ -17,12 +17,8 @@ def run_pipeline_controller():
             return jsonify({"error": "Missing required field: plan_text"}), 400
 
         # Call main function
-        run_pipeline(
-            plan_text=plan_text,
-            level=level,
-            style=style,
-            final_k=final_k,
-            mcq_count=mcq_count,
+        generate_content_from_plan(
+            plan_text=plan_text
         )
 
         return jsonify({"message": "Pipeline executed successfully!"}), 200
