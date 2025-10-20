@@ -10,7 +10,8 @@ from app.services.web_article import get_article_text
 from app.services.chunker import make_chunks
 from app.services.embeddings import embed_chunks
 from app.services.generate_queries import generate_queries_from_plan
-from app.services.article_generator import generate_article_content
+from app.services.generator import generate_all
+from app.services.pinecone_index import upsert_chunks
 import logging
 
 logger = logging.getLogger(__name__)
@@ -55,36 +56,13 @@ def run_pipeline(url: str, plan: dict) -> dict:
         
         logger.info(f"Generated {len(vectors)} embeddings")
         
-        # 4. Initialize Pinecone
+        # 4. Initialize Pinecone using the generalized approach
         logger.info(f"Initializing Pinecone...")
-        from pinecone import Pinecone, ServerlessSpec
+        from app.services.pinecone_index import ensure_index
         
-        # Initialize Pinecone
-        pc = Pinecone(api_key=cfg.PINECONE_API_KEY)
-        
-        # Check if index exists, create if not
-        index_name = cfg.PINECONE_INDEX
-        existing_indexes = [index_info["name"] for index_info in pc.list_indexes()]
-        
-        if index_name not in existing_indexes:
-            logger.info(f"Creating new Pinecone index: {index_name}")
-            pc.create_index(
-                name=index_name,
-                dimension=384,  # all-MiniLM-L6-v2 dimension
-                metric="cosine",
-                spec=ServerlessSpec(
-                    cloud=cfg.PINECONE_CLOUD,
-                    region=cfg.PINECONE_REGION
-                )
-            )
-            logger.info("Waiting for index to be ready...")
-            time.sleep(10)
-        else:
-            logger.info(f"Using existing Pinecone index: {index_name}")
-        
-        # Get index
-        index = pc.Index(index_name)
-        logger.info(f"Pinecone index connected")
+        # Ensure index exists (creates if needed)
+        ensure_index()
+        logger.info(f"Pinecone index ready")
         
         # 5. Create namespace for this article
         from urllib.parse import urlparse
@@ -95,11 +73,11 @@ def run_pipeline(url: str, plan: dict) -> dict:
         
         logger.info(f"Using namespace: {namespace}")
         
-        # 6. Upsert to Pinecone
+        # 6. Upsert to Pinecone using generalized approach
         logger.info(f"Upserting {len(vectors)} vectors to Pinecone namespace '{namespace}'...")
         
-        # Prepare vectors for upsert
-        vectors_to_upsert = []
+        # Prepare embedded chunks for the generalized upsert function
+        embedded_chunks = []
         for i, vec in enumerate(vectors):
             try:
                 if isinstance(vec, dict):
@@ -126,15 +104,10 @@ def run_pipeline(url: str, plan: dict) -> dict:
                 if not isinstance(vector_values[0], (int, float)):
                     raise ValueError(f"vector_values contains non-numeric data: {type(vector_values[0])}")
                 
-                vectors_to_upsert.append({
+                embedded_chunks.append({
                     "id": f"{namespace}_{i}",
-                    "values": vector_values,
-                    "metadata": {
-                        "text": chunk_text,
-                        "url": url,
-                        "title": article["title"],
-                        "chunk_index": i
-                    }
+                    "text": chunk_text,
+                    "vector": vector_values
                 })
                 
             except Exception as e:
@@ -144,29 +117,19 @@ def run_pipeline(url: str, plan: dict) -> dict:
                     logger.error(f"Vector keys: {list(vec.keys())}")
                 raise
         
-        # Upsert in batches
-        batch_size = 100
-        for i in range(0, len(vectors_to_upsert), batch_size):
-            batch = vectors_to_upsert[i:i+batch_size]
-            batch_num = i//batch_size + 1
-            total_batches = (len(vectors_to_upsert)-1)//batch_size + 1
-            logger.info(f"Upserting batch {batch_num}/{total_batches} ({len(batch)} vectors)...")
-            index.upsert(vectors=batch, namespace=namespace)
+        # Use the generalized upsert function
+        upserted_count = upsert_chunks(
+            namespace=namespace,
+            embedded_chunks=embedded_chunks,
+            batch_size=100,
+            store_text_metadata=True
+        )
         
-        logger.info(f"Upsert completed successfully")
+        logger.info(f"Upsert completed successfully: {upserted_count} vectors")
         
         # Wait for Pinecone to index
         logger.info("Waiting for Pinecone indexing...")
         time.sleep(5)
-        
-        # Verify upsert
-        try:
-            stats = index.describe_index_stats()
-            ns_stats = stats.get('namespaces', {}).get(namespace, {})
-            vector_count = ns_stats.get('vector_count', 0)
-            logger.info(f"Namespace '{namespace}' has {vector_count} vectors")
-        except Exception as e:
-            logger.warning(f"Could not get stats: {e}")
         
         # 7. Generate queries
         logger.info("Generating RAG queries...")
@@ -174,44 +137,8 @@ def run_pipeline(url: str, plan: dict) -> dict:
         queries = generate_queries_from_plan(plan_str)
         logger.info(f"Generated {len(queries)} queries")
         
-        # 8. Retrieve contexts
-        logger.info("Retrieving contexts from Pinecone...")
-        from sentence_transformers import SentenceTransformer
-        embedding_model = SentenceTransformer(cfg.EMBEDDING_MODEL_NAME)
-        
-        all_contexts = []
-        for query in queries:
-            try:
-                query_vector = embedding_model.encode([query])[0].tolist()
-                
-                results = index.query(
-                    vector=query_vector,
-                    top_k=cfg.TOP_K,
-                    namespace=namespace,
-                    include_metadata=True
-                )
-                
-                for match in results.get('matches', []):
-                    text = match.get('metadata', {}).get('text', '')
-                    if text and text not in all_contexts:
-                        all_contexts.append(text)
-                        
-            except Exception as e:
-                logger.error(f"Query failed for '{query}': {e}")
-        
-        contexts = all_contexts[:cfg.TOP_K * 2]
-        logger.info(f"Retrieved {len(contexts)} unique context chunks")
-        
-        if not contexts:
-            logger.error("No contexts retrieved!")
-        
-        # 9. Generate teaching materials with new article generator
-        logger.info("Generating teaching materials with Gemini...")
-        article_meta = {
-            "title": article["title"],
-            "url": url,
-            "source": "web_article"
-        }
+        # 8. Generate teaching materials using the generalized generator
+        logger.info("Generating teaching materials with generalized generator...")
         
         # Extract plan parameters
         subject = plan.get('subject', 'General Topic')
@@ -238,15 +165,18 @@ def run_pipeline(url: str, plan: dict) -> dict:
         
         logger.info(f"Topic: {topic_statement}")
         logger.info(f"Level: {level}")
-        logger.info(f"Contexts: {len(contexts)} chunks")
+        logger.info(f"Queries: {len(queries)}")
         
-        # Use new article-specific generator
-        outputs = generate_article_content(
-            contexts=contexts,
+        # Use the generalized generator with the new approach
+        outputs = generate_all(
+            namespace=namespace,
             topic=topic_statement,
+            queries=queries,
             level=level,
             style="detailed",
             language="en",
+            final_k=8,
+            max_context_chars=6000,
             mcq_count=10
         )
         
@@ -254,24 +184,31 @@ def run_pipeline(url: str, plan: dict) -> dict:
         summary_text = outputs.get('summary', {}).get('summary', '')
         mcq_count = len(outputs.get('mcqs', {}).get('questions', []))
         
-        if summary_text and summary_text != "No content available - no contexts retrieved":
+        if summary_text and summary_text != "insufficient information":
             logger.info(f"Generated summary ({len(summary_text)} chars) and {mcq_count} MCQs")
         else:
             logger.error("Failed to generate content")
         
-        # 10. Save outputs
+        # 9. Save outputs
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir = os.path.join(cfg.DATA_PATH, "article_outputs")
         os.makedirs(output_dir, exist_ok=True)
         
         output_file = os.path.join(output_dir, f"article_{url_hash}_{timestamp}.json")
         
+        # Create article metadata
+        article_meta = {
+            "title": article["title"],
+            "url": url,
+            "source": "web_article"
+        }
+        
         final_output = {
             "article": article_meta,
             "plan": plan,
             "outputs": outputs,
             "chunks_processed": len(chunks),
-            "contexts_retrieved": len(contexts),
+            "queries_generated": len(queries),
             "namespace": namespace,
             "timestamp": timestamp
         }
@@ -287,7 +224,7 @@ def run_pipeline(url: str, plan: dict) -> dict:
             "outputs": outputs,
             "output_file": output_file,
             "chunks_processed": len(chunks),
-            "contexts_retrieved": len(contexts),
+            "queries_generated": len(queries),
             "namespace": namespace
         }
         
