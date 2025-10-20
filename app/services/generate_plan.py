@@ -92,7 +92,6 @@ def _build_prompt(
     desc_block = (description or "").strip() or "none"
     return f"{_PLAN_TEMPLATE.format(level=level, style=style, language=language, topics_block=topics_block, desc_block=desc_block)}\n\n{_SCHEMA}"
 
-
 # =========================
 # JSON helpers
 # =========================
@@ -162,7 +161,6 @@ def _normalize_weights(plan: Dict[str, Any]) -> Dict[str, Any]:
         s["weight"] = w
     return plan
 
-
 # =========================
 # Public API
 # =========================
@@ -199,7 +197,7 @@ def generate_plan(
         raise RuntimeError("GOOGLE_API_KEY missing. Set it in your environment/.env.")
 
     genai.configure(api_key=cfg.GOOGLE_API_KEY)
-    model = genai.GenerativeModel(model_name or getattr(cfg, "LLM_MODEL_NAME", "gemini-1.5-flash"),
+    model = genai.GenerativeModel(model_name or getattr(cfg, "LLM_MODEL_NAME", "gemini-2.5-flash"),
                                   system_instruction=_SYSTEM_PROMPT)
 
     prompt = _build_prompt(level=level, style=style, topics=topics_list, language=language, description=description)

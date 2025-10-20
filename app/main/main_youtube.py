@@ -17,8 +17,6 @@ from app.services.generator import generate_all
 
 import app.config as cfg
 
-
-
 def _ensure_dirs():
     Path(cfg.DATA_PATH).mkdir(parents=True, exist_ok=True)
     (Path(cfg.DATA_PATH) / "outputs").mkdir(parents=True, exist_ok=True)
