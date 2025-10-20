@@ -68,3 +68,9 @@ out/
 *.csv
 *.json
 artifacts/
+
+# === Local test artifacts ===
+# Temporary files created during local testing - safe to ignore
+run_upload.py
+upload_test.py
+test_upload.txt

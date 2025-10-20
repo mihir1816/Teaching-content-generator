@@ -73,3 +73,15 @@ flask-cors
 langchain-community
 beautifulsoup4
 lxml
+
+# Optional (recommended) for File Upload extraction flow:
+# Docling provides unified machine-text and OCR extraction locally.
+# Add after checking compatibility with existing pinned packages:
+# docling
+docling
+
+# Fallback libraries used by the file extractor if docling is not available:
+PyPDF2
+python-docx
+pytesseract
+Pillow
