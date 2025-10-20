@@ -74,6 +74,10 @@ langchain-community
 beautifulsoup4
 lxml
 
+# --- PPT generation ---
+python-pptx
+Pillow
+
 <<<<<<< HEAD
 # Optional (recommended) for File Upload extraction flow:
 # Docling provides unified machine-text and OCR extraction locally.
