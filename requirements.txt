@@ -78,19 +78,11 @@ lxml
 python-pptx
 Pillow
 
-<<<<<<< HEAD
 # Optional (recommended) for File Upload extraction flow:
 # Docling provides unified machine-text and OCR extraction locally.
-# Add after checking compatibility with existing pinned packages:
-# docling
 docling
 
 # Fallback libraries used by the file extractor if docling is not available:
 PyPDF2
 python-docx
 pytesseract
-=======
-# --- PPT generation ---
-python-pptx
->>>>>>> 20f6bdf6d73c22162298f54bfba132a01ce16c5e
-Pillow

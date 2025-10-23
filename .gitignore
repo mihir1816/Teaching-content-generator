@@ -74,3 +74,4 @@ artifacts/
 run_upload.py
 upload_test.py
 test_upload.txt
+test_file_upload.py
