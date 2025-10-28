@@ -1,353 +1,420 @@
-from __future__ import annotations
-import json
-import re
-import time
+"""
+PowerPoint builder service with improved formatting and content extraction.
+"""
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.enum.text import PP_ALIGN, MSO_AUTO_SIZE
+from pptx.dml.color import RGBColor
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+import logging
 
-import app.config as cfg
-
-try:
-    from pptx import Presentation
-    from pptx.util import Inches, Pt
-    from pptx.enum.text import PP_ALIGN
-    from pptx.dml.color import RGBColor
-except Exception as e:
-    raise ImportError(
-        "python-pptx is required. Install with:\n  pip install python-pptx>=0.6.21"
-    ) from e
+logger = logging.getLogger(__name__)
 
 
-# =========================
-# Helpers / formatting
-# =========================
-def _slugify(text: str) -> str:
-    text = (text or "").strip().lower()
-    text = re.sub(r"[^a-z0-9]+", "-", text)
-    text = re.sub(r"-{2,}", "-", text).strip("-")
-    return text or "untitled"
-
-def _ensure_outputs_dir() -> Path:
-    out_dir = Path(getattr(cfg, "DATA_PATH", "data/")) / "outputs"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    return out_dir
-
-def _as_list(x: Any) -> List[str]:
-    if not x:
-        return []
-    if isinstance(x, str):
-        return [x]
-    if isinstance(x, Iterable):
-        return [str(i) for i in x]
-    return [str(x)]
-
-def _trim(s: str) -> str:
-    return (s or "").strip()
-
-def _split_chunks(items: List[str], chunk_size: int) -> List[List[str]]:
-    return [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
-
-def _shape_textframe(tf, title: bool = False):
-    # Simple, clean defaults
-    for p in tf.paragraphs:
-        p.font.name = "Calibri"
-        p.font.size = Pt(18 if not title else 40)
-        p.font.color.rgb = RGBColor(25, 25, 25)
-
-def _add_title_slide(prs: Presentation, title: str, subtitle: str = ""):
-    slide = prs.slides.add_slide(prs.slide_layouts[0])  # Title
-    slide.shapes.title.text = _trim(title) or "Untitled"
-    _shape_textframe(slide.shapes.title.text_frame, title=True)
-    if slide.placeholders and len(slide.placeholders) > 1:
-        sub = slide.placeholders[1]
-        sub.text = _trim(subtitle)
-        _shape_textframe(sub.text_frame)
-        for p in sub.text_frame.paragraphs:
-            p.alignment = PP_ALIGN.LEFT
-    return slide
-
-def _add_title_content_slide(prs: Presentation, title: str, content: str):
-    slide = prs.slides.add_slide(prs.slide_layouts[1])  # Title & Content
-    slide.shapes.title.text = _trim(title)
-    _shape_textframe(slide.shapes.title.text_frame, title=True)
-    body = slide.shapes.placeholders[1].text_frame
-    body.clear()
-    p = body.paragraphs[0]
-    p.text = _trim(content)
-    p.font.name = "Calibri"
-    p.font.size = Pt(20)
-    return slide
-
-def _add_bullets_slide(prs: Presentation, title: str, bullets: List[str], max_per_slide: int = 8):
-    # Split across slides if needed
-    chunks = _split_chunks([b for b in bullets if _trim(b)], max_per_slide)
-    slides = []
-    for i, part in enumerate(chunks, start=1):
-        t = title if len(chunks) == 1 else f"{title} (Part {i})"
-        slide = prs.slides.add_slide(prs.slide_layouts[1])
-        slide.shapes.title.text = _trim(t)
-        _shape_textframe(slide.shapes.title.text_frame, title=True)
-        tf = slide.shapes.placeholders[1].text_frame
-        tf.clear()
-        for j, bullet in enumerate(part):
-            if j == 0:
-                p = tf.paragraphs[0]
-            else:
-                p = tf.add_paragraph()
-            p.text = _trim(bullet)
-            p.level = 0
-            p.font.name = "Calibri"
-            p.font.size = Pt(20)
-        slides.append(slide)
-    return slides
-
-def _add_section_slide(prs: Presentation, title: str, bullets: List[str], max_per_slide: int = 7):
-    return _add_bullets_slide(prs, title, bullets, max_per_slide=max_per_slide)
-
-def _add_table_slide(prs: Presentation, title: str, headers: List[str], rows: List[Tuple[str, str]], col_widths: Tuple[float, float] = (5.0, 7.0)):
-    slide = prs.slides.add_slide(prs.slide_layouts[5])  # Title Only
-    slide.shapes.title.text = _trim(title)
-    _shape_textframe(slide.shapes.title.text_frame, title=True)
-
-    # add table
-    rows_n = max(1, len(rows)) + 1  # + header
-    cols_n = max(2, len(headers))
-    left = Inches(0.5)
-    top = Inches(1.5)
-    width = Inches(12.0)
-    height = Inches(6.0)
-
-    table = slide.shapes.add_table(rows_n, cols_n, left, top, width, height).table
-    for i, h in enumerate(headers):
-        cell = table.cell(0, i)
-        cell.text = _trim(h)
-        _shape_textframe(cell.text_frame)
-        for p in cell.text_frame.paragraphs:
-            p.font.bold = True
-
-    # set column widths
-    if len(col_widths) == cols_n:
-        for i, w in enumerate(col_widths):
-            table.columns[i].width = Inches(w)
-
-    for r_idx, (c1, c2) in enumerate(rows, start=1):
-        table.cell(r_idx, 0).text = _trim(c1)
-        table.cell(r_idx, 1).text = _trim(c2)
-        _shape_textframe(table.cell(r_idx, 0).text_frame)
-        _shape_textframe(table.cell(r_idx, 1).text_frame)
-
-    return slide
-
-def _add_mcq_slide(prs: Presentation, q: Dict[str, Any], reveal_inline: bool = True):
-    stem = _trim(q.get("stem") or q.get("question") or "")
-    options = _as_list(q.get("options"))
-    answer = _trim(q.get("answer") or "")
-    explanation = _trim(q.get("explanation") or "")
-
-    slide = prs.slides.add_slide(prs.slide_layouts[1])
-    slide.shapes.title.text = stem or "Question"
-    _shape_textframe(slide.shapes.title.text_frame, title=True)
-
-    tf = slide.shapes.placeholders[1].text_frame
-    tf.clear()
-
-    # options
-    for i, opt in enumerate(options):
-        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        p.text = _trim(opt)
-        p.level = 0
-        p.font.name = "Calibri"
-        p.font.size = Pt(20)
-
-    if reveal_inline and (answer or explanation):
-        p = tf.add_paragraph()
-        p.text = ""
-        p.level = 0
-        p = tf.add_paragraph()
-        p.text = f"Answer: {answer}"
-        p.font.bold = True
-        p.font.size = Pt(20)
-        if explanation:
-            p = tf.add_paragraph()
-            p.text = f"Why: {explanation}"
-            p.font.size = Pt(18)
-
-    return slide
-
-
-# =========================
-# Schema adapters
-# =========================
-def _extract_from_generate_all(result: Dict[str, Any]) -> Dict[str, Any]:
+def build_ppt_from_result(result: dict, output_dir: Path = None) -> Path:
     """
-    For objects produced by app.services.generator.generate_all(...)
+    Build a PowerPoint presentation from generation result.
+    
+    Args:
+        result: Dictionary with notes, summary, mcqs
+        output_dir: Directory to save PPT (default: data/outputs)
+    
+    Returns:
+        Path to generated PPT file
     """
-    topic = result.get("topic") or "Untitled"
-    level = result.get("level", "beginner")
-    style = result.get("style", "concise")
-
-    notes = result.get("notes") or {}
-    summary = result.get("summary") or {}
-    mcqs = result.get("mcqs") or {}
-
-    overview = _trim(notes.get("summary") or summary.get("summary") or summary.get("overview") or "")
-    key_points = _as_list(notes.get("key_points") or summary.get("key_points"))
-
-    sections = []
-    for sec in notes.get("sections") or []:
-        title = _trim(sec.get("title") or "")
-        bullets = [b for b in _as_list(sec.get("bullets")) if _trim(b)]
-        if title and bullets:
-            sections.append((title, bullets))
-
-    glossary_rows = []
-    for g in notes.get("glossary") or []:
-        term = _trim(g.get("term") or "")
-        definition = _trim(g.get("definition") or "")
-        if term and definition:
-            glossary_rows.append((term, definition))
-
-    misconceptions = []
-    for m in notes.get("misconceptions") or []:
-        st = _trim(m.get("statement") or "")
-        corr = _trim(m.get("correction") or "")
-        if st and corr:
-            misconceptions.append(f"{st} → {corr}")
-
-    questions = mcqs.get("questions") or []
-
-    return {
-        "topic": topic,
-        "level": level,
-        "style": style,
-        "overview": overview,
-        "key_points": key_points,
-        "sections": sections,
-        "glossary_rows": glossary_rows,
-        "misconceptions": misconceptions,
-        "questions": questions,
-    }
-
-def _extract_from_plan_content(result: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    For objects produced by app.main.main_topic_name.generate_content_from_plan(...)
-    """
-    topic = result.get("topic") or "Untitled"
-    level = result.get("level", "beginner")
-    style = result.get("style", "concise")
-
-    notes = result.get("notes") or {}
-    summary = result.get("summary") or {}
-    mcqs = result.get("mcqs") or {}
-
-    overview = _trim(notes.get("summary") or summary.get("overview") or "")
-    key_points = _as_list(notes.get("key_points") or summary.get("key_points"))
-
-    sections = []
-    for sec in notes.get("sections") or []:
-        title = _trim(sec.get("title") or "")
-        bullets = [b for b in _as_list(sec.get("bullets")) if _trim(b)]
-        if title and bullets:
-            sections.append((title, bullets))
-
-    glossary_rows = []
-    for g in notes.get("glossary") or []:
-        term = _trim(g.get("term") or "")
-        definition = _trim(g.get("definition") or "")
-        if term and definition:
-            glossary_rows.append((term, definition))
-
-    misconceptions = []
-    for m in notes.get("misconceptions") or []:
-        st = _trim(m.get("statement") or "")
-        corr = _trim(m.get("correction") or "")
-        if st and corr:
-            misconceptions.append(f"{st} → {corr}")
-
-    questions = mcqs.get("questions") or []
-
-    return {
-        "topic": topic,
-        "level": level,
-        "style": style,
-        "overview": overview,
-        "key_points": key_points,
-        "sections": sections,
-        "glossary_rows": glossary_rows,
-        "misconceptions": misconceptions,
-        "questions": questions,
-    }
-
-
-# =========================
-# Public API
-# =========================
-def build_ppt_from_result(result: Dict[str, Any], output_path: Optional[str] = None, reveal_answers_inline: bool = True) -> str:
-    """
-    Create a PowerPoint file (.pptx) from the model result dict.
-    Accepts both shapes of result:
-      - app.services.generator.generate_all
-      - app.main.main_topic_name.generate_content_from_plan
-
-    Returns: output file path (str)
-    """
-    # Normalize schema
-    if "notes" in result and "summary" in result and "mcqs" in result:
-        data = _extract_from_generate_all(result)
-    else:
-        data = _extract_from_plan_content(result)
-
-    topic = data["topic"]
-    level = data["level"]
-    style = data["style"]
-
+    if output_dir is None:
+        output_dir = Path("data/outputs")
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
     prs = Presentation()
-
-    # Title slide
-    _add_title_slide(
-        prs,
-        title=topic,
-        subtitle=f"Level: {level.title()}  •  Style: {style.replace('-', ' ').title()}"
-    )
-
-    # Overview / Summary
-    if data["overview"]:
-        _add_title_content_slide(prs, "Overview", data["overview"])
-
-    # Key Points
-    if data["key_points"]:
-        _add_bullets_slide(prs, "Key Points", data["key_points"], max_per_slide=8)
-
-    # Sections
-    for sec_title, bullets in data["sections"]:
-        _add_section_slide(prs, sec_title, bullets, max_per_slide=7)
-
-    # Glossary as a table (term, definition)
-    if data["glossary_rows"]:
-        # If too many rows, split into multiple slides
-        rows = data["glossary_rows"]
-        for chunk in _split_chunks(rows, 10):
-            _add_table_slide(
-                prs,
-                title="Glossary",
-                headers=["Term", "Definition"],
-                rows=chunk,
-                col_widths=(4.0, 8.0)
-            )
-
-    # Misconceptions
-    if data["misconceptions"]:
-        _add_bullets_slide(prs, "Common Misconceptions", data["misconceptions"], max_per_slide=7)
-
-    # MCQs: one per slide
-    if data["questions"]:
-        for q in data["questions"]:
-            _add_mcq_slide(prs, q, reveal_inline=reveal_answers_inline)
-
+    prs.slide_width = Inches(10)
+    prs.slide_height = Inches(7.5)
+    
+    topic = result.get("topic", "Teaching Content")
+    if isinstance(topic, list):
+        topic = ", ".join(topic[:3])  # Take first 3 topics
+    
+    level = result.get("level", "beginner")
+    
+    logger.info(f"Building PPT for topic: {topic}")
+    logger.info(f"Result structure: {result.keys()}")
+    
+    # 1. Title Slide
+    _add_title_slide(prs, topic, level)
+    
+    # 2. Summary Slides
+    summary_data = result.get("summary", {})
+    if summary_data and isinstance(summary_data, dict):
+        logger.info(f"Adding summary slides: {summary_data.keys()}")
+        _add_summary_slides(prs, summary_data)
+    
+    # 3. Notes Slides
+    notes_data = result.get("notes", {})
+    if notes_data and isinstance(notes_data, dict):
+        logger.info(f"Adding notes slides: {notes_data.keys()}")
+        _add_notes_slides(prs, notes_data)
+    
+    # 4. Glossary Slide
+    glossary = None
+    if notes_data and isinstance(notes_data, dict):
+        glossary = notes_data.get("glossary", [])
+    
+    if glossary and len(glossary) > 0:
+        logger.info(f"Adding glossary with {len(glossary)} terms")
+        _add_glossary_slide(prs, glossary)
+    
+    # 5. MCQ Slides
+    mcqs_data = result.get("mcqs", {})
+    if mcqs_data and isinstance(mcqs_data, dict):
+        questions = mcqs_data.get("questions", [])
+        if questions:
+            logger.info(f"Adding {len(questions)} MCQ slides")
+            _add_mcq_slides(prs, questions)
+    
     # Save
-    out_dir = _ensure_outputs_dir()
-    ts = time.strftime("%Y%m%d_%H%M%S")
-    default_name = f"{_slugify(topic)}_{ts}.pptx"
-    out_path = Path(output_path) if output_path else (out_dir / default_name)
-    prs.save(str(out_path))
-    return str(out_path)
+    topic_safe = str(topic).replace(' ', '_')[:30]
+    ppt_filename = f"{topic_safe}_presentation.pptx"
+    ppt_path = output_dir / ppt_filename
+    prs.save(str(ppt_path))
+    
+    logger.info(f"PowerPoint saved: {ppt_path}")
+    return ppt_path
+
+
+def _add_title_slide(prs, topic, level):
+    """Add title slide with proper formatting."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])  # Blank layout
+    
+    # Background color
+    background = slide.background
+    fill = background.fill
+    fill.solid()
+    fill.fore_color.rgb = RGBColor(31, 78, 120)  # Dark blue
+    
+    # Title
+    title_box = slide.shapes.add_textbox(
+        Inches(0.5), Inches(2.5), Inches(9), Inches(1.5)
+    )
+    title_frame = title_box.text_frame
+    title_frame.word_wrap = True
+    
+    p = title_frame.paragraphs[0]
+    p.text = str(topic)
+    p.alignment = PP_ALIGN.CENTER
+    p.font.size = Pt(40)
+    p.font.bold = True
+    p.font.color.rgb = RGBColor(255, 255, 255)
+    
+    # Subtitle
+    subtitle_box = slide.shapes.add_textbox(
+        Inches(0.5), Inches(4.5), Inches(9), Inches(0.8)
+    )
+    subtitle_frame = subtitle_box.text_frame
+    subtitle_frame.word_wrap = True
+    
+    p = subtitle_frame.paragraphs[0]
+    p.text = f"Level: {level.capitalize()}"
+    p.alignment = PP_ALIGN.CENTER
+    p.font.size = Pt(24)
+    p.font.color.rgb = RGBColor(200, 200, 200)
+
+
+def _add_summary_slides(prs, summary_data):
+    """Add summary slides with proper text wrapping."""
+    logger.info(f"Summary data: {summary_data}")
+    
+    summary_text = summary_data.get("summary", "")
+    key_points = summary_data.get("key_points", [])
+    
+    # Summary text slide
+    if summary_text and len(summary_text.strip()) > 0:
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        
+        # Title
+        title_box = slide.shapes.add_textbox(
+            Inches(0.5), Inches(0.3), Inches(9), Inches(0.6)
+        )
+        title_frame = title_box.text_frame
+        p = title_frame.paragraphs[0]
+        p.text = "Summary"
+        p.font.size = Pt(32)
+        p.font.bold = True
+        p.font.color.rgb = RGBColor(31, 78, 120)
+        
+        # Content with proper bounds
+        content_box = slide.shapes.add_textbox(
+            Inches(0.7), Inches(1.2), Inches(8.6), Inches(5.8)
+        )
+        content_frame = content_box.text_frame
+        content_frame.word_wrap = True
+        content_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        
+        # Split long text into paragraphs
+        paragraphs = summary_text.split('. ')
+        for i, para in enumerate(paragraphs[:4]):  # Limit to 4 sentences per slide
+            if i > 0:
+                content_frame.add_paragraph()
+            p = content_frame.paragraphs[i]
+            para_text = para.strip()
+            if para_text and not para_text.endswith('.'):
+                para_text += '.'
+            p.text = _truncate_text(para_text, 600)
+            p.font.size = Pt(16)
+            p.space_after = Pt(12)
+            p.level = 0
+        
+        logger.info("Added summary slide")
+    
+    # Key points slide
+    if key_points and len(key_points) > 0:
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        
+        # Title
+        title_box = slide.shapes.add_textbox(
+            Inches(0.5), Inches(0.3), Inches(9), Inches(0.6)
+        )
+        title_frame = title_box.text_frame
+        p = title_frame.paragraphs[0]
+        p.text = "Key Points"
+        p.font.size = Pt(32)
+        p.font.bold = True
+        p.font.color.rgb = RGBColor(31, 78, 120)
+        
+        # Bullet points with proper spacing
+        content_box = slide.shapes.add_textbox(
+            Inches(0.7), Inches(1.2), Inches(8.6), Inches(5.8)
+        )
+        content_frame = content_box.text_frame
+        content_frame.word_wrap = True
+        
+        for i, point in enumerate(key_points[:6]):  # Max 6 points
+            if i > 0:
+                content_frame.add_paragraph()
+            p = content_frame.paragraphs[i]
+            p.text = "• " + _truncate_text(str(point), 150)
+            p.font.size = Pt(18)
+            p.space_after = Pt(16)
+            p.level = 0
+        
+        logger.info(f"Added key points slide with {len(key_points)} points")
+
+
+def _add_notes_slides(prs, notes_data):
+    """Add notes slides with sections - handles 'bullets' field."""
+    logger.info(f"Notes data keys: {notes_data.keys()}")
+    
+    # Get sections
+    sections = notes_data.get("sections", [])
+    
+    if not sections or len(sections) == 0:
+        logger.warning("No sections found in notes")
+        return
+    
+    logger.info(f"Processing {len(sections)} sections")
+    
+    for idx, section in enumerate(sections[:8]):  # Max 8 sections
+        logger.info(f"Section {idx}: {section.get('title', 'Unknown')}")
+        
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        
+        # Section title
+        section_title = section.get("title", f"Section {idx + 1}")
+        title_box = slide.shapes.add_textbox(
+            Inches(0.5), Inches(0.3), Inches(9), Inches(0.6)
+        )
+        title_frame = title_box.text_frame
+        p = title_frame.paragraphs[0]
+        p.text = _truncate_text(str(section_title), 80)
+        p.font.size = Pt(28)
+        p.font.bold = True
+        p.font.color.rgb = RGBColor(31, 78, 120)
+        
+        # Section content - check for 'bullets' field first, then 'content'
+        bullets = section.get("bullets", [])
+        
+        if not bullets:
+            # Fallback to 'content' field if 'bullets' doesn't exist
+            content = section.get("content", "")
+            if content:
+                bullets = [content]
+            else:
+                bullets = ["No content available."]
+                logger.warning(f"Empty content for section: {section_title}")
+        
+        # Create text box for bullets
+        content_box = slide.shapes.add_textbox(
+            Inches(0.7), Inches(1.2), Inches(8.6), Inches(5.8)
+        )
+        content_frame = content_box.text_frame
+        content_frame.word_wrap = True
+        
+        # Add each bullet point
+        for i, bullet in enumerate(bullets[:6]):  # Max 6 bullets per slide
+            if i > 0:
+                content_frame.add_paragraph()
+            p = content_frame.paragraphs[i]
+            p.text = "• " + _truncate_text(str(bullet), 250)
+            p.font.size = Pt(16)
+            p.space_after = Pt(14)
+            p.level = 0
+        
+        logger.info(f"Added section slide: {section_title} with {len(bullets)} bullets")
+
+
+def _add_glossary_slide(prs, glossary):
+    """Add glossary slide in single-column layout."""
+    # Create multiple slides if glossary is too long
+    terms_per_slide = 8
+    total_slides = (len(glossary) + terms_per_slide - 1) // terms_per_slide
+    
+    for slide_num in range(total_slides):
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        
+        # Title
+        title_box = slide.shapes.add_textbox(
+            Inches(0.5), Inches(0.3), Inches(9), Inches(0.6)
+        )
+        title_frame = title_box.text_frame
+        p = title_frame.paragraphs[0]
+        title_text = "Glossary" if total_slides == 1 else f"Glossary ({slide_num + 1}/{total_slides})"
+        p.text = title_text
+        p.font.size = Pt(32)
+        p.font.bold = True
+        p.font.color.rgb = RGBColor(31, 78, 120)
+        
+        # Content
+        content_box = slide.shapes.add_textbox(
+            Inches(0.7), Inches(1.2), Inches(8.6), Inches(5.8)
+        )
+        content_frame = content_box.text_frame
+        content_frame.word_wrap = True
+        
+        # Get terms for this slide
+        start_idx = slide_num * terms_per_slide
+        end_idx = min(start_idx + terms_per_slide, len(glossary))
+        terms_for_slide = glossary[start_idx:end_idx]
+        
+        for i, item in enumerate(terms_for_slide):
+            if i > 0:
+                content_frame.add_paragraph()
+            
+            term = item.get("term", "")
+            definition = item.get("definition", "")
+            
+            p = content_frame.paragraphs[i]
+            p.text = f"• {term}: {_truncate_text(definition, 150)}"
+            p.font.size = Pt(14)
+            p.space_after = Pt(12)
+
+
+def _add_mcq_slides(prs, questions):
+    """Add MCQ slides - handles 'stem' and 'answer' fields."""
+    for idx, q in enumerate(questions[:10], 1):  # Max 10 MCQs
+        # Question slide
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        
+        # Question number/title
+        title_box = slide.shapes.add_textbox(
+            Inches(0.5), Inches(0.3), Inches(9), Inches(0.5)
+        )
+        title_frame = title_box.text_frame
+        p = title_frame.paragraphs[0]
+        p.text = f"Question {idx}"
+        p.font.size = Pt(24)
+        p.font.bold = True
+        p.font.color.rgb = RGBColor(31, 78, 120)
+        
+        # Question text - check for 'stem' first, then 'question'
+        question_text = q.get("stem", q.get("question", ""))
+        
+        q_box = slide.shapes.add_textbox(
+            Inches(0.7), Inches(1.0), Inches(8.6), Inches(1.5)
+        )
+        q_frame = q_box.text_frame
+        q_frame.word_wrap = True
+        p = q_frame.paragraphs[0]
+        p.text = _truncate_text(question_text, 250)
+        p.font.size = Pt(18)
+        p.font.bold = True
+        
+        # Options
+        options_box = slide.shapes.add_textbox(
+            Inches(0.7), Inches(2.8), Inches(8.6), Inches(3.5)
+        )
+        options_frame = options_box.text_frame
+        options_frame.word_wrap = True
+        
+        options = q.get("options", [])
+        for i, opt in enumerate(options[:4]):  # Max 4 options
+            if i > 0:
+                options_frame.add_paragraph()
+            p = options_frame.paragraphs[i]
+            # Options might already have labels like "A)" or just be plain text
+            opt_text = str(opt).strip()
+            if not opt_text.startswith(('A)', 'B)', 'C)', 'D)')):
+                label = chr(65 + i)  # A, B, C, D
+                opt_text = f"{label}) {opt_text}"
+            p.text = _truncate_text(opt_text, 150)
+            p.font.size = Pt(16)
+            p.space_after = Pt(12)
+        
+        # Answer slide
+        answer_slide = prs.slides.add_slide(prs.slide_layouts[6])
+        
+        # Answer title
+        ans_title_box = answer_slide.shapes.add_textbox(
+            Inches(0.5), Inches(0.3), Inches(9), Inches(0.5)
+        )
+        ans_title_frame = ans_title_box.text_frame
+        p = ans_title_frame.paragraphs[0]
+        p.text = f"Answer - Question {idx}"
+        p.font.size = Pt(24)
+        p.font.bold = True
+        p.font.color.rgb = RGBColor(46, 125, 50)
+        
+        # Correct answer - check for 'answer' or 'correct_answer'
+        correct_ans = q.get("answer", q.get("correct_answer", ""))
+        
+        ans_box = answer_slide.shapes.add_textbox(
+            Inches(0.7), Inches(1.5), Inches(8.6), Inches(1.0)
+        )
+        ans_frame = ans_box.text_frame
+        ans_frame.word_wrap = True
+        p = ans_frame.paragraphs[0]
+        p.text = f"✓ Correct Answer: {correct_ans}"
+        p.font.size = Pt(22)
+        p.font.bold = True
+        p.font.color.rgb = RGBColor(46, 125, 50)
+        
+        # Explanation
+        explanation = q.get("explanation", "No explanation provided.")
+        exp_box = answer_slide.shapes.add_textbox(
+            Inches(0.7), Inches(3.0), Inches(8.6), Inches(3.5)
+        )
+        exp_frame = exp_box.text_frame
+        exp_frame.word_wrap = True
+        exp_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        p = exp_frame.paragraphs[0]
+        p.text = _truncate_text(explanation, 500)
+        p.font.size = Pt(16)
+        p.space_after = Pt(10)
+
+
+def _truncate_text(text: str, max_chars: int) -> str:
+    """Truncate text to max characters, adding ellipsis if needed."""
+    if not text:
+        return ""
+    
+    text = str(text).strip()
+    if len(text) <= max_chars:
+        return text
+    
+    # Find last space before max_chars
+    truncated = text[:max_chars]
+    last_space = truncated.rfind(' ')
+    
+    if last_space > max_chars * 0.8:  # If space is reasonably close
+        return truncated[:last_space] + "..."
+    
+    return truncated + "..."

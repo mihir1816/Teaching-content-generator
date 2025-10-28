@@ -1,86 +1,103 @@
 """
-Controller for combined source teaching content generation pipeline.
+Controller for combined sources (YouTube + Articles + Files) teaching content generation.
 """
-from flask import jsonify, request
-from app.main.main_combined import run_pipeline
+from flask import request, jsonify
 import logging
+import json
+from app.main.main_combined import run_pipeline
 
 logger = logging.getLogger(__name__)
 
 def run_pipeline_controller():
     """
-    HTTP endpoint to run combined sources pipeline.
-    
-    The endpoint accepts multiple content sources (videos, articles, files) and
-    generates topic-specific content based on user preferences. Each topic can
-    have an optional depth rating that controls how detailed the content should be.
-    
-    Expected JSON body:
-    {
-        "sources": {
-            "videos": ["https://youtube.com/watch?v=..."],
-            "articles": ["https://example.com/article1"],
-            "files": ["file1.pdf", "file2.docx"]  # Base64 encoded or file paths
-        },
-        "topics": [
-            {
-                "name": "Newton's Laws",
-                # Optional: depth/rating (1-5) to control content detail level
-                # 1: Brief overview (~3 chunks)
-                # 2: Basic understanding (~5 chunks)
-                # 3: Intermediate detail (~8 chunks) [DEFAULT]
-                # 4: In-depth (~12 chunks)
-                # 5: Comprehensive (~15 chunks)
-                "depth": 3
-            }
-        ],
-        "config": {
-            "language": "en",
-            "style": "concise",
-            "content_types": ["notes", "summary", "mcqs"],
-            # Optional: Default depth for topics without specified depth
-            "default_depth": 3  # Uses intermediate detail if not specified
-        }
-    }
+    Handle POST request for combined pipeline.
+    Accepts multipart/form-data with:
+    - videos: JSON array of YouTube URLs (form field)
+    - articles: JSON array of article URLs (form field)
+    - files: Multiple file uploads (form field, can be multiple)
+    - plan_text: Learning plan text (form field)
+    - topics: JSON array of topics (form field)
+    - level: Learning level (form field, default: beginner)
+    - style: Content style (form field, default: concise)
     """
     try:
-        data = request.get_json()
+        # Get form fields
+        videos_str = request.form.get('videos', '[]')
+        articles_str = request.form.get('articles', '[]')
+        plan_text = request.form.get('plan_text')
+        topics_str = request.form.get('topics')
+        level = request.form.get('level', 'beginner')
+        style = request.form.get('style', 'concise')
+        
+        # Get uploaded files
+        uploaded_files = request.files.getlist('files')
+        
+        # Validate at least one source is provided
+        if not videos_str.strip() and not articles_str.strip() and not uploaded_files:
+            return jsonify({
+                "status": "error",
+                "message": "At least one source (videos, articles, or files) must be provided"
+            }), 400
+        
+        # Parse JSON strings
+        try:
+            videos = json.loads(videos_str) if videos_str.strip() else []
+            articles = json.loads(articles_str) if articles_str.strip() else []
+            topics = json.loads(topics_str) if topics_str else []
+        except json.JSONDecodeError as e:
+            return jsonify({
+                "status": "error",
+                "message": f"Invalid JSON format: {str(e)}"
+            }), 400
         
         # Validate required fields
-        if not data:
-            return jsonify({"error": "Request body is required"}), 400
+        if not plan_text:
+            return jsonify({
+                "status": "error",
+                "message": "Missing required field: plan_text"
+            }), 400
         
-        sources = data.get("sources")
-        if not sources or not any(sources.values()):
-            return jsonify({"error": "At least one source (video, article, or file) is required"}), 400
+        if not topics or not isinstance(topics, list):
+            return jsonify({
+                "status": "error",
+                "message": "topics must be a non-empty list"
+            }), 400
         
-        topics = data.get("topics")
-        if not topics:
-            return jsonify({"error": "At least one topic is required"}), 400
+        # Validate list types
+        if not isinstance(videos, list):
+            return jsonify({
+                "status": "error",
+                "message": "videos must be a list"
+            }), 400
         
-        config = data.get("config", {})
+        if not isinstance(articles, list):
+            return jsonify({
+                "status": "error",
+                "message": "articles must be a list"
+            }), 400
         
-        # Get default depth setting from config (fallback to intermediate=3)
-        default_depth = config.get("default_depth", 3)
+        logger.info(f"Processing combined sources:")
+        logger.info(f"  Videos: {len(videos)}")
+        logger.info(f"  Articles: {len(articles)}")
+        logger.info(f"  Files: {len(uploaded_files)}")
+        logger.info(f"Plan: {plan_text}")
+        logger.info(f"Topics: {topics}")
+        logger.info(f"Level: {level}, Style: {style}")
         
-        # Validate depth settings
-        for topic in topics:
-            if "depth" in topic:
-                depth = topic["depth"]
-                if not isinstance(depth, int) or depth < 1 or depth > 5:
-                    return jsonify({
-                        "error": f"Invalid depth for topic '{topic['name']}'. Must be integer 1-5"
-                    }), 400
+        # Build sources dictionary
+        sources = {
+            "videos": videos,
+            "articles": articles,
+            "files": uploaded_files  # Pass FileStorage objects directly
+        }
         
-        # Run pipeline with depth configuration
-        logger.info(f"Starting combined pipeline with {len(topics)} topics (default depth: {default_depth})")
+        # Call the main pipeline function
         result = run_pipeline(
             sources=sources,
+            plan_text=plan_text,
             topics=topics,
-            language=config.get("language", "en"),
-            style=config.get("style", "concise"),
-            content_types=config.get("content_types", ["notes", "summary", "mcqs"]),
-            default_depth=default_depth  # Pass default depth to pipeline
+            level=level,
+            style=style
         )
         
         return jsonify({
@@ -88,9 +105,18 @@ def run_pipeline_controller():
             "data": result
         }), 200
         
-    except ValueError as ve:
-        logger.error(f"Validation error: {str(ve)}")
-        return jsonify({"error": str(ve)}), 400
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 400
+        
     except Exception as e:
         logger.error(f"Pipeline error: {str(e)}")
-        return jsonify({"error": f"Pipeline failed: {str(e)}"}), 500
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "status": "error",
+            "message": f"Pipeline failed: {str(e)}"
+        }), 500

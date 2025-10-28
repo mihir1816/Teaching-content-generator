@@ -5,10 +5,10 @@ from flask import Blueprint
 from app.controllers.file_upload_controller import upload_files_controller
 
 # Create blueprint
-file_upload_bp = Blueprint('file_upload', __name__, url_prefix='/api/file_upload')
+file_upload_bp = Blueprint('file_upload', __name__)
 
 # Register routes
-@file_upload_bp.route('/pipeline', methods=['POST'])
+@file_upload_bp.route('/run_file_upload_pipeline', methods=['POST'])
 def file_upload_pipeline_route():
     """
     POST /api/file_upload/pipeline

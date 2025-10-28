@@ -58,7 +58,7 @@ _SCHEMA_NOTES = """Return JSON ONLY with this schema:
     {"term": "string", "definition": "string"}         // 5–10 entries
   ],
   "misconceptions": [
-    {"statement": "string", "correction": "string"}    // 3–5 entries
+    {"statement": "string", "correction": "string"}    // 1–3 entries
   ]
 }
 """

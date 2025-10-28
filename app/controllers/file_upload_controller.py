@@ -1,81 +1,101 @@
 """
 Controller to handle file uploads for the File Upload flow.
-Accepts multipart form-data with 'file' (single file) and plan data as form fields.
-Calls the main_file_upload pipeline and returns teaching content.
+Accepts multipart form-data with 'file' and plan data as form fields.
 """
 from flask import request, jsonify
-import json
 import logging
 from app.main.main_file_upload import run_pipeline
 
 logger = logging.getLogger(__name__)
 
-
 def upload_files_controller():
     """
-    HTTP endpoint to run file upload pipeline.
-    
-    Expected form-data:
-    - file: The uploaded file (PDF, DOCX, TXT, images, etc.)
-    - subject: Subject/topic name
-    - grade_level: Grade level (e.g., "10th Grade", "beginner", "intermediate")
-    - learning_outcomes: JSON array of learning outcomes (optional)
-    - content_types: JSON array of content types (optional, defaults to ["notes", "summary", "mcqs"])
+    Handle POST request with multipart/form-data.
+    Expected fields:
+    - file: The uploaded file (PDF, DOCX, TXT, PNG, JPG, TIFF)
+    - plan_text: JSON string with plan details
+    - topics: JSON array of topics
+    - level: beginner/intermediate/advanced
+    - style: concise/detailed/exam-prep
     """
     try:
-        # Check for file
+        # Check if file is present
         if 'file' not in request.files:
-            return jsonify({"error": "No file in the request. Use form field 'file'."}), 400
-
-        file = request.files['file']
-        if not file or file.filename == '':
-            return jsonify({"error": "No file selected."}), 400
-
-        # Get plan data from form fields
-        subject = request.form.get('subject')
-        grade_level = request.form.get('grade_level')
+            return jsonify({
+                "status": "error",
+                "message": "No file part in request"
+            }), 400
         
-        if not subject or not grade_level:
-            return jsonify({"error": "subject and grade_level are required"}), 400
+        file_storage = request.files['file']
         
-        # Parse learning_outcomes if provided
-        learning_outcomes_str = request.form.get('learning_outcomes', '[]')
+        if file_storage.filename == '':
+            return jsonify({
+                "status": "error",
+                "message": "No file selected"
+            }), 400
+        
+        # Get form fields
+        plan_text = request.form.get('plan_text')
+        topics_str = request.form.get('topics')
+        level = request.form.get('level', 'beginner')
+        style = request.form.get('style', 'concise')
+        
+        # Validate required fields
+        if not plan_text:
+            return jsonify({
+                "status": "error",
+                "message": "Missing required field: plan_text"
+            }), 400
+        
+        if not topics_str:
+            return jsonify({
+                "status": "error",
+                "message": "Missing required field: topics"
+            }), 400
+        
+        # Parse topics (expecting JSON array string)
+        import json
         try:
-            learning_outcomes = json.loads(learning_outcomes_str)
-        except json.JSONDecodeError:
-            return jsonify({"error": "learning_outcomes must be a valid JSON array"}), 400
+            topics = json.loads(topics_str)
+            if not isinstance(topics, list) or not topics:
+                raise ValueError("topics must be a non-empty list")
+        except (json.JSONDecodeError, ValueError) as e:
+            return jsonify({
+                "status": "error",
+                "message": f"Invalid topics format: {str(e)}"
+            }), 400
         
-        # Parse content_types if provided
-        content_types_str = request.form.get('content_types', '["notes", "summary", "mcqs"]')
-        try:
-            content_types = json.loads(content_types_str)
-        except json.JSONDecodeError:
-            return jsonify({"error": "content_types must be a valid JSON array"}), 400
+        logger.info(f"Processing file: {file_storage.filename}")
+        logger.info(f"Plan: {plan_text}")
+        logger.info(f"Topics: {topics}")
+        logger.info(f"Level: {level}, Style: {style}")
         
-        # Build plan
-        plan = {
-            "subject": subject,
-            "grade_level": grade_level,
-            "learning_outcomes": learning_outcomes,
-            "content_types": content_types
-        }
-        
-        # Run pipeline
-        logger.info(f"Starting file upload pipeline for file: {file.filename}")
-        logger.info(f"Plan: {json.dumps(plan, indent=2)}")
-        
-        result = run_pipeline(file, plan)
+        # Call the main pipeline function
+        result = run_pipeline(
+            file_storage=file_storage,
+            plan_text=plan_text,
+            topics=topics,
+            level=level,
+            style=style
+        )
         
         return jsonify({
             "status": "success",
             "data": result
         }), 200
-
-    except ValueError as ve:
-        logger.error(f"Validation error: {str(ve)}")
-        return jsonify({"error": str(ve)}), 400
+        
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 400
+        
     except Exception as e:
         logger.error(f"Pipeline error: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
-        return jsonify({"error": f"Pipeline failed: {str(e)}"}), 500
+        return jsonify({
+            "status": "error",
+            "message": f"Pipeline failed: {str(e)}"
+        }), 500

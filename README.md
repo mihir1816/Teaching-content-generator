@@ -9,7 +9,6 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
-<<<<<<< HEAD
 
 ## File Upload extraction endpoint
 
@@ -37,5 +36,3 @@ curl -X POST -F "files=@C:/path/to/file.pdf" http://127.0.0.1:5000/api/file_uplo
 ```
 
 
-=======
->>>>>>> 20f6bdf6d73c22162298f54bfba132a01ce16c5e

@@ -6,7 +6,7 @@ from app.controllers.combined_controller import run_pipeline_controller
 
 combined_pipeline = Blueprint('combined_pipeline', __name__)
 
-@combined_pipeline.route('/api/combined/generate', methods=['POST'])
+@combined_pipeline.route('/run_combined_pipeline', methods=['POST'])
 def run_pipeline():
     """
     Endpoint to run the combined sources pipeline.
