@@ -4,7 +4,7 @@ from app.services.generate_plan import generate_plan
 def generate_plan_controller():
     try:
         data = request.get_json()
-
+        
         level = data.get("level")
         style = data.get("style")
         topics = data.get("topics")

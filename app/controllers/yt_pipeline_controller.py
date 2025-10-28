@@ -9,21 +9,15 @@ def run_pipeline_controller():
         plan_text = data.get("plan_text")
         level = data.get("level", "beginner")
         style = data.get("style", "concise")
-        language = data.get("language", "en")
-        reingest = data.get("reingest", True)
-        final_k = data.get("final_k", 8)
-        mcq_count = data.get("mcq_count", 8)
+        topics = data.get("topics")
 
         # Call the main function
         run_pipeline(
             video=video,
             plan_text=plan_text,
+            topics=topics,
             level=level,
             style=style,
-            language=language,
-            reingest=reingest,
-            final_k=final_k,
-            mcq_count=mcq_count,
         )
 
         return jsonify({"message": "Pipeline executed successfully!"}), 200

@@ -77,6 +77,8 @@ lxml
 # --- PPT generation ---
 python-pptx
 Pillow
+defusedxml
+typing-extensions
 
 # Optional (recommended) for File Upload extraction flow:
 # Docling provides unified machine-text and OCR extraction locally.

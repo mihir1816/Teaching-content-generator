@@ -12,7 +12,6 @@ except Exception as e:
         "google-generativeai is required. Install it with:\n  pip install google-generativeai"
     ) from e
 
-
 # =========================
 # System instruction
 # =========================

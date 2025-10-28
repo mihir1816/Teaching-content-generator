@@ -30,36 +30,26 @@ def _save_json(obj: Dict[str, Any], path: Path):
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
 
-def _infer_topic_from_plan(plan_text: str, fallback: str = "Untitled Topic") -> str:
-    """
-    Try to infer a human-friendly topic label from the plan string.
-    - Prefer first non-empty line (trimmed to ~80 chars)
-    - Else use first 6–8 tokens
-    """
-    for line in plan_text.splitlines():
-        ln = line.strip()
-        if ln:
-            return (ln[:80]).strip()
-    # fallback: first few words
-    words = plan_text.strip().split()
-    if not words:
-        return fallback
-    return " ".join(words[:8])
-
-
 def run_pipeline(
     video: str,
     plan_text: str,
+    topics: List[str],
     level: str,
     style: str,
-    language: str = "en",
-    reingest: bool = True,
-    final_k: int = 8,
-    mcq_count: int = 8,
 ):
     print(">>> Loading .env and prepping folders ...")
     load_dotenv()
     _ensure_dirs()
+
+    # Determine final_k based on style
+    if style == "concise":
+        final_k = 3
+    elif style == "detailed":
+        final_k = 8
+    elif style == "exam-prep":
+        final_k = 5
+    else:
+        final_k = 8  # default
 
     # 1) Transcript (English-first; auto-translate if needed)
     print(">>> Fetching transcript ...")
@@ -83,18 +73,16 @@ def run_pipeline(
     namespace = f"video:{video_id}"
     print(f">>> Using namespace: {namespace}")
 
-    # 5) Index + upsert
-    if reingest:
-        print(">>> Ensuring Pinecone index & upserting ...")
-        ensure_index()
-        count = upsert_chunks(
-            namespace=namespace,
-            embedded_chunks=embedded,
-            batch_size=100
-        )
-        print(f"    upserted: {count} vectors into namespace: {namespace}")
-    else:
-        print(">>> Skipping re-ingest (reingest=False).")
+   
+    print(">>> Ensuring Pinecone index & upserting ...")
+    ensure_index()
+    count = upsert_chunks(
+        namespace=namespace,
+        embedded_chunks=embedded,
+        batch_size=100
+    )
+    print(f"    upserted: {count} vectors into namespace: {namespace}")
+
 
     out_dir = Path(cfg.DATA_PATH) / "outputs"
 
@@ -102,43 +90,27 @@ def run_pipeline(
     print(">>> Generating retrieval queries from plan (Gemini) ...")
     queries = generate_queries_from_plan(plan_text, n=8)
     print(f"    queries: {queries}")
-    _save_json({"plan": plan_text, "queries": queries, "level": level, "style": style, "language": language},
+    _save_json({"plan": plan_text, "queries": queries, "level": level, "style": style},
                out_dir / f"{video_id}_plan_queries.json")
 
-    # 7) Retrieve (dense RAG)
-    print(">>> Retrieving top context (dense) ...")
-    hits = retrieve_from_queries(
-        namespace=namespace,
-        queries=queries,
-        per_query_k=5,
-        final_k=final_k,
-        include_text=True,
-    )
-    print(f"    fused hits: {len(hits)}")
-
     # 8) Generate Notes → Summary → MCQs (Gemini, no citations)
-    topic_label = _infer_topic_from_plan(plan_text)
     print(">>> Generating Notes, Summary, MCQs (Gemini) ...")
     result = generate_all(
         namespace=namespace,
-        topic=topic_label,
+        topic=topics,
         queries=queries,
         level=level,
         style=style,
-        language=language,
         final_k=final_k,
         max_context_chars=6000,
         model_name=getattr(cfg, "LLM_MODEL_NAME", "gemini-1.5-flash"),
-        mcq_count=mcq_count,
     )
     
     ppt_path = build_ppt_from_result(result)
 
-
     _save_json(result, out_dir / f"{video_id}_results.json")
     print(f"    results saved -> {out_dir / (video_id + '_results.json')}")
     print(">>> Done.")
-
 
 def _parse_args():
     p = argparse.ArgumentParser(description="YouTube RAG pipeline (Gemini) using a provided plan string.")
@@ -147,7 +119,6 @@ def _parse_args():
     p.add_argument("--level", choices=["beginner", "intermediate", "advanced"], default="beginner")
     p.add_argument("--style", choices=["concise", "detailed", "exam-prep"], default="concise")
     p.add_argument("--language", default="en")
-    p.add_argument("--no-reingest", action="store_true")
     p.add_argument("--final-k", type=int, default=8)
     p.add_argument("--mcq-count", type=int, default=8)
     return p.parse_args()
@@ -158,10 +129,7 @@ if __name__ == "__main__":
     run_pipeline(
         video=args.video,
         plan_text=args.plan,
+        topics=args.topics,
         level=args.level,
         style=args.style,
-        language=args.language,
-        reingest=not args.no_reingest,
-        final_k=args.final_k,
-        mcq_count=args.mcq_count,
     )
