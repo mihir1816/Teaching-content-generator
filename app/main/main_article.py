@@ -63,6 +63,8 @@ def run_pipeline(
     print(">>> Fetching article ...")
     article = get_article_text(url)
     article_text = article["text"]
+    if isinstance(article_text, list):
+        article_text = "\n\n".join(article_text)
     article_title = article["title"]
     
     # Create namespace for this article
@@ -104,6 +106,17 @@ def run_pipeline(
     _save_json({"plan": plan_text, "queries": queries, "level": level, "style": style},
                out_dir / f"{url_hash}_plan_queries.json")
 
+    # 6) Retrieve (dense RAG)
+    print(">>> Retrieving top context (dense) ...")
+    hits = retrieve_from_queries(
+        namespace=namespace,
+        queries=queries,
+        per_query_k=5,
+        final_k=final_k,
+        include_text=True,
+    )
+    print(f"    fused hits: {len(hits)}")
+
     # 7) Generate Notes → Summary → MCQs (Gemini, no citations)
     print(">>> Generating Notes, Summary, MCQs (Gemini) ...")
     result = generate_all(
@@ -114,7 +127,7 @@ def run_pipeline(
         style=style,
         final_k=final_k,
         max_context_chars=6000,
-        model_name=getattr(cfg, "LLM_MODEL_NAME", "gemini-2.5-flash"),
+        model_name=getattr(cfg, "LLM_MODEL_NAME", "gemini-1.5-flash"),
     )
     
     ppt_path = build_ppt_from_result(result)

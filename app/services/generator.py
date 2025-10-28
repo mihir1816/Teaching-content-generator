@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 
 import app.config as cfg
 from app.services.retriever import retrieve_from_queries
@@ -153,7 +153,7 @@ def _json_sanitize(s: str) -> Dict[str, Any]:
 # =========================
 def generate_all(
     namespace: str,
-    topic: str,
+    topic: Union[str, List[str]],
     queries: List[str],
     level: str = "beginner",
     style: str = "concise",
@@ -168,7 +168,7 @@ def generate_all(
     
     Args:
         namespace: Pinecone namespace (e.g., "video:abc123" or "article:example:hash")
-        topic: Topic label for the content
+        topic: Topic label for the content (string or list of strings)
         queries: List of retrieval queries
         level: Difficulty level (beginner/intermediate/advanced)
         style: Writing style (concise/detailed/exam-prep)
@@ -183,6 +183,12 @@ def generate_all(
     if not cfg.GOOGLE_API_KEY:
         raise RuntimeError("GOOGLE_API_KEY missing. Set it in your environment/.env.")
 
+    # Handle topic as string or list
+    if isinstance(topic, list):
+        topic_str = ", ".join(topic) if topic else "General Topic"
+    else:
+        topic_str = topic or "General Topic"
+
     # 1) Retrieve once using your simple dense RAG
     hits = retrieve_from_queries(
         namespace=namespace,
@@ -195,12 +201,12 @@ def generate_all(
     # If nothing retrieved, return "insufficient information" scaffolds
     if not hits:
         scaffold = {
-            "topic": topic,
+            "topic": topic_str,
             "level": level,
             "language": language,
             "style": style,
             "notes": {
-                "topic": topic, "objective": "notes", "level": level, "language": language, "style": style,
+                "topic": topic_str, "objective": "notes", "level": level, "language": language, "style": style,
                 "summary": "insufficient information",
                 "key_points": [],
                 "sections": [],
@@ -208,12 +214,12 @@ def generate_all(
                 "misconceptions": []
             },
             "summary": {
-                "topic": topic, "objective": "summary", "level": level, "language": language, "style": style,
+                "topic": topic_str, "objective": "summary", "level": level, "language": language, "style": style,
                 "summary": "insufficient information",
                 "key_points": []
             },
             "mcqs": {
-                "topic": topic, "objective": "mcqs", "level": level, "language": language, "style": style,
+                "topic": topic_str, "objective": "mcqs", "level": level, "language": language, "style": style,
                 "questions": []
             }
         }
@@ -223,31 +229,31 @@ def generate_all(
     model = model_name or getattr(cfg, "LLM_MODEL_NAME", "gemini-1.5-flash")
 
     # 2) NOTES
-    notes_prompt = _build_prompt("notes", topic, level, style, language, context_block)
+    notes_prompt = _build_prompt("notes", topic_str, level, style, language, context_block)
     notes_raw = _gemini_call(notes_prompt, model)
     notes = _json_sanitize(notes_raw)
 
     # 3) SUMMARY
-    summary_prompt = _build_prompt("summary", topic, level, style, language, context_block)
+    summary_prompt = _build_prompt("summary", topic_str, level, style, language, context_block)
     summary_raw = _gemini_call(summary_prompt, model)
     summary = _json_sanitize(summary_raw)
 
     # 4) MCQS (nudge for quantity)
     mcq_steer = f"\n\nAdditional requirement: generate approximately {mcq_count} questions."
-    mcqs_prompt = _build_prompt("mcqs", topic, level, style, language, context_block) + mcq_steer
+    mcqs_prompt = _build_prompt("mcqs", topic_str, level, style, language, context_block) + mcq_steer
     mcqs_raw = _gemini_call(mcqs_prompt, model)
     mcqs = _json_sanitize(mcqs_raw)
 
     # Backfill missing required fields if the model omitted any
     for blob, objective in ((notes, "notes"), (summary, "summary"), (mcqs, "mcqs")):
-        blob.setdefault("topic", topic)
+        blob.setdefault("topic", topic_str)
         blob.setdefault("objective", objective)
         blob.setdefault("level", level)
         blob.setdefault("language", language)
         blob.setdefault("style", style)
 
     return {
-        "topic": topic,
+        "topic": topic_str,
         "level": level,
         "language": language,
         "style": style,

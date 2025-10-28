@@ -1,4 +1,3 @@
-# app/main/main_topic_name.py
 from __future__ import annotations
 import json
 import re
@@ -6,6 +5,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 import app.config as cfg
+from app.services.ppt_builder import build_ppt_from_result
 
 # Gemini SDK (required)
 try:
@@ -16,35 +16,114 @@ except Exception as e:
     ) from e
 
 
-SYSTEM_PROMPT = """You are “Classroom Coach,” a helpful teacher assistant.
-Write clear, structured, student-friendly content.
-Do NOT include citations, IDs, or external references.
-Respond ONLY with valid JSON that matches the schema you are given—no extra text.
-If some information is missing from the plan, make reasonable assumptions and proceed.
+SYSTEM_PROMPT = """You are "Classroom Coach," an expert educational content creator who produces high-quality teaching materials.
+
+YOUR MISSION:
+- Create clear, accurate, and engaging educational content
+- Adapt complexity and depth based on the student's level
+- Structure information logically and pedagogically
+- Include practical examples and real-world applications
+- Anticipate and address common misconceptions
+- Write in a supportive, encouraging tone
+
+CRITICAL RULES:
+- Do NOT include citations, references, or source IDs
+- Output MUST be valid JSON matching the exact schema provided
+- Use ONLY information from the provided plan/context
+- If information is missing, use "insufficient information" rather than inventing facts
+- NO extra text outside the JSON structure
 """
 
-# JSON schemas we want back (single response including all three objectives)
-SCHEMA = """Return JSON ONLY with this schema:
+# Level-specific guidelines
+LEVEL_GUIDELINES = {
+    "beginner": """
+BEGINNER LEVEL APPROACH:
+- Use simple, everyday language - avoid jargon
+- Start with foundational concepts and build gradually
+- Include plenty of concrete examples and analogies
+- Break down complex ideas into small, digestible steps
+- Emphasize "why" things matter before "how" they work
+- Use relatable scenarios from daily life
+""",
+    "intermediate": """
+INTERMEDIATE LEVEL APPROACH:
+- Use standard terminology with clear explanations
+- Connect concepts to show relationships and patterns
+- Include both theory and practical applications
+- Introduce some complexity and nuance
+- Balance breadth and depth of coverage
+- Reference real-world use cases and scenarios
+""",
+    "advanced": """
+ADVANCED LEVEL APPROACH:
+- Use precise technical terminology freely
+- Explore subtle distinctions and edge cases
+- Include theoretical foundations and advanced applications
+- Discuss trade-offs, limitations, and best practices
+- Connect to broader context and cutting-edge developments
+- Challenge with thought-provoking questions and scenarios
+"""
+}
+
+# Style-specific guidelines
+STYLE_GUIDELINES = {
+    "concise": """
+CONCISE STYLE:
+- Keep explanations brief and to-the-point (3-5 sentences max)
+- Focus on essential information only
+- Use bullet points for clarity
+- Limit examples to 1-2 most illustrative cases
+- Aim for quick reference and rapid learning
+- 5-7 key points maximum
+- 2-3 sections with 3-4 bullets each
+""",
+    "detailed": """
+DETAILED STYLE:
+- Provide comprehensive explanations (6-10 sentences)
+- Include context, background, and rationale
+- Use multiple examples to illustrate concepts
+- Explore implications and applications
+- Add helpful analogies and metaphors
+- 8-12 key points
+- 4-6 sections with 5-7 bullets each
+- Rich glossary with thorough definitions
+""",
+    "exam-prep": """
+EXAM-PREP STYLE:
+- Focus on testable knowledge and skills
+- Highlight key formulas, definitions, and procedures
+- Include common exam question patterns
+- Emphasize frequent mistakes and how to avoid them
+- Provide memory aids and mnemonics
+- Structure content as study guides
+- 6-8 key points focused on assessment
+- 3-4 sections organized by exam topics
+- Extensive misconceptions section (5-8 items)
+"""
+}
+
+# JSON schema
+SCHEMA = """Return JSON ONLY with this exact schema:
 {
   "topic": "string",
   "level": "beginner|intermediate|advanced",
   "style": "concise|detailed|exam-prep",
   "language": "string",
   "notes": {
-    "summary": "string",                  // 3–6 sentences
-    "key_points": ["string", "..."],      // 5–10 bullets
-    "sections": [                         // 2–5 sections
+    "summary": "string",
+    "key_points": ["string", "..."],
+    "sections": [
       { "title": "string", "bullets": ["string", "..."] }
     ],
-    "glossary": [                         // 5–10 terms
+    "glossary": [
       { "term": "string", "definition": "string" }
     ],
-    "misconceptions": [                   // 3–5 items
+    "misconceptions": [
       { "statement": "string", "correction": "string" }
     ]
   },
   "summary": {
-    "overview": "string",                 // 5–8 tight sentences
+    "overview": "string",
     "key_points": ["string", "..."]
   },
   "mcqs": {
@@ -67,14 +146,27 @@ STYLE: {style}
 LANGUAGE: {language}
 MCQ_COUNT: {mcq_count}
 
-PLAN (from teacher):
+{level_guide}
+
+{style_guide}
+
+TEACHER'S PLAN:
 {plan_pretty}
 
-INSTRUCTIONS:
-- Produce high-quality content aligned to LEVEL and STYLE.
-- Make the content self-contained and readable.
-- MCQs: generate approximately MCQ_COUNT items.
-- No citations or external links.
+YOUR TASK:
+1. Create comprehensive NOTES following the level and style guidelines above
+2. Write a focused SUMMARY that captures the essence
+3. Generate {mcq_count} high-quality MCQs that test understanding at the appropriate level
+
+QUALITY CHECKLIST:
+✓ Content matches the {level} level complexity
+✓ Format follows the {style} style requirements
+✓ All sections are complete and well-structured
+✓ Examples are relevant and clear
+✓ Glossary terms are essential and well-defined
+✓ Misconceptions address real student confusion
+✓ MCQs test genuine understanding, not just memorization
+✓ Output is valid JSON with no extra text
 """
 
 def _slugify(text: str) -> str:
@@ -89,79 +181,84 @@ def _ensure_output_dir() -> Path:
     return out_dir
 
 def _json_sanitize(s: str) -> Dict[str, Any]:
-    # strict parse first
     try:
         return json.loads(s)
     except Exception:
         pass
-    # best-effort: extract the first {...} block
     start = s.find("{")
     end = s.rfind("}")
     if start != -1 and end != -1 and end > start:
         return json.loads(s[start:end + 1])
     raise ValueError("LLM did not return valid JSON.")
 
-def generate_content_from_plan(plan: Dict[str, Any], output_path: Optional[str] = None) -> Dict[str, Any]:
+def generate_content_from_plan(
+    plan: Dict[str, Any], 
+    output_path: Optional[str] = None,
+    level: str = "beginner",
+    style: str = "concise"
+) -> Dict[str, Any]:
     """
     Generate Notes + Summary + MCQs directly from a teacher plan using Gemini (no RAG).
-    Reads topic/level/style/mcq_count from `plan` if present, else uses defaults.
-
-    Returns:
-      {
-        "topic": ...,
-        "level": ...,
-        "style": ...,
-        "language": ...,
-        "notes": {...},
-        "summary": {...},
-        "mcqs": {...},
-        "_output_path": "data/outputs/<topic>_plan_content.json"
-      }
     """
     if not getattr(cfg, "GOOGLE_API_KEY", None):
         raise RuntimeError("GOOGLE_API_KEY missing in config/env.")
 
-    # Extract controls from plan or use defaults
     topic = plan.get("topic") or (", ".join(plan.get("topics", [])) if plan.get("topics") else "Untitled Topic")
-    level = plan.get("level", "beginner")
-    style = plan.get("style", "concise")
     language = plan.get("language", "en")
     mcq_count = int(plan.get("mcq_count", 8))
 
-    # Prepare prompt
+    level_guide = LEVEL_GUIDELINES.get(level, LEVEL_GUIDELINES["beginner"])
+    style_guide = STYLE_GUIDELINES.get(style, STYLE_GUIDELINES["concise"])
+
     plan_pretty = json.dumps(plan, ensure_ascii=False, indent=2)
     task = TASK_TEMPLATE.format(
-        topic=topic, level=level, style=style, language=language, mcq_count=mcq_count, plan_pretty=plan_pretty
+        topic=topic, 
+        level=level, 
+        style=style, 
+        language=language, 
+        mcq_count=mcq_count, 
+        plan_pretty=plan_pretty,
+        level_guide=level_guide,
+        style_guide=style_guide
     )
     prompt = f"{task}\n\n{SCHEMA}"
 
-    # Model
     genai.configure(api_key=cfg.GOOGLE_API_KEY)
     model_name = getattr(cfg, "LLM_MODEL_NAME", "gemini-1.5-flash")
     model = genai.GenerativeModel(model_name, system_instruction=SYSTEM_PROMPT)
 
-    # Call LLM
+    print(f">>> Generating content for: {topic}")
+    print(f"    Level: {level}, Style: {style}, Language: {language}")
+
     resp = model.generate_content(prompt)
     raw = (resp.text or "").strip()
     data = _json_sanitize(raw)
 
-    # Backfill required fields if missing
     data.setdefault("topic", topic)
     data.setdefault("level", level)
     data.setdefault("style", style)
     data.setdefault("language", language)
-    # Ensure mcq count field mirrors request (not mandatory if model already filled)
+
     if "mcqs" in data and isinstance(data["mcqs"], dict):
         data["mcqs"].setdefault("count", mcq_count)
 
-    # Decide output path
     out_dir = _ensure_output_dir()
     default_name = f"{_slugify(topic)}_plan_content.json"
     out_path = Path(output_path) if output_path else (out_dir / default_name)
 
-    # Save
     with Path(out_path).open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print(f"    JSON saved -> {out_path}")
+
+    print(">>> Building PPT ...")
+    try:
+        ppt_path = build_ppt_from_result(data)
+        print(f"    PPT saved -> {ppt_path}")
+        data["_ppt_path"] = str(ppt_path)
+    except Exception as e:
+        print(f"    PPT generation failed: {str(e)}")
+        data["_ppt_path"] = None
 
     data["_output_path"] = str(out_path)
     return data

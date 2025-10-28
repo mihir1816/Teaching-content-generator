@@ -56,6 +56,8 @@ def run_pipeline(
     t = get_transcript_text(video)
     video_id = t["video_id"]
     transcript_text = t["text"]
+    if isinstance(transcript_text, list):
+        transcript_text = "\n\n".join(transcript_text)
     print(f"    video_id: {video_id}, lang: {t['language']}, chars: {len(transcript_text)}")
 
     # 2) Chunk
@@ -93,6 +95,17 @@ def run_pipeline(
     _save_json({"plan": plan_text, "queries": queries, "level": level, "style": style},
                out_dir / f"{video_id}_plan_queries.json")
 
+    # 7) Retrieve (dense RAG)
+    print(">>> Retrieving top context (dense) ...")
+    hits = retrieve_from_queries(
+        namespace=namespace,
+        queries=queries,
+        per_query_k=5,
+        final_k=final_k,
+        include_text=True,
+    )
+    print(f"    fused hits: {len(hits)}")
+
     # 8) Generate Notes → Summary → MCQs (Gemini, no citations)
     print(">>> Generating Notes, Summary, MCQs (Gemini) ...")
     result = generate_all(
@@ -106,7 +119,13 @@ def run_pipeline(
         model_name=getattr(cfg, "LLM_MODEL_NAME", "gemini-1.5-flash"),
     )
     
-    ppt_path = build_ppt_from_result(result)
+    print(">>> Building PPT ...")
+    try:
+        ppt_path = build_ppt_from_result(result)
+        print(f"    PPT saved -> {ppt_path}")
+    except Exception as e:
+        print(f"    PPT generation failed: {str(e)}")
+        ppt_path = None
 
     _save_json(result, out_dir / f"{video_id}_results.json")
     print(f"    results saved -> {out_dir / (video_id + '_results.json')}")

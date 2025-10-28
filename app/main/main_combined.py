@@ -74,8 +74,11 @@ def run_pipeline(
         for article in articles:
             try:
                 a = get_article_text(article)
-                all_texts.append(a["text"])
-                print(f"    article: {a['title']}, chars: {len(a['text'])}")
+                article_text = a["text"]
+                if isinstance(article_text, list):
+                    article_text = "\n\n".join(article_text)
+                all_texts.append(article_text)
+                print(f"    article: {a['title']}, chars: {len(article_text)}")
             except Exception as e:
                 print(f"    Error processing article {article}: {str(e)}")
 
@@ -158,4 +161,4 @@ def run_pipeline(
 
     _save_json(result, out_dir / "combined_results.json")
     print(f"    results saved -> {out_dir / 'combined_results.json'}")
-    print(">>> Done.")
+    print(">>> Done.")  

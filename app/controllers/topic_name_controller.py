@@ -8,7 +8,7 @@ def run_pipeline_controller():
         plan_text = data.get("plan_text")
         level = data.get("level", "beginner")
         style = data.get("style", "concise")
-        mcq_count = data.get("mcq_count", 8)
+
 
         # Validate required field
         if not plan_text:
@@ -21,7 +21,7 @@ def run_pipeline_controller():
             return jsonify({"error": "Invalid JSON in plan_text"}), 400
 
         # Call main function with plan dict
-        result = generate_content_from_plan(plan=plan_dict)
+        result = generate_content_from_plan(plan=plan_dict , level=level, style=style)
 
         return jsonify({
             "message": "Pipeline executed successfully!",
