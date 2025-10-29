@@ -10,7 +10,7 @@ def generate_plan_controller():
         topics = data.get("topics")
         description = data.get("description")
         language = data.get("language", "en")
-        model_name = data.get("model_name")
+        # model_name = data.get("model_name")
 
         if not level or not style or not topics:
             return jsonify({
@@ -24,7 +24,7 @@ def generate_plan_controller():
             topics=topics,
             description=description,
             language=language,
-            model_name=model_name
+            # model_name=model_name
         )
 
         return jsonify({

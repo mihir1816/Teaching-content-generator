@@ -12,6 +12,7 @@ except Exception as e:
         "google-generativeai is required. Install it with:\n  pip install google-generativeai"
     ) from e
 
+
 # =========================
 # System instruction
 # =========================
@@ -36,17 +37,17 @@ _SCHEMA = """Return JSON ONLY with this schema:
   "style": "concise|detailed|exam-prep",
   "language": "string",
   "topics": ["string", "..."],
-  "planner_notes": "string",                 // brief rationale of the structure
-  "overall_objectives": ["string", "..."],   // 3–6 high-level outcomes
+  "planner_notes": "string",                 
+  "overall_objectives": ["string", "..."],   
   "subtopics": [
     {
       "title": "string",
-      "weight": 0,                           // integer percent, 0–100
+      "weight": 0,                           
       "learning_outcomes": ["string", "..."],
       "key_terms": ["string", "..."],
       "suggested_examples": ["string", "..."],
-      "suggested_questions": 0,              // how many MCQs/short-answer to generate later
-      "estimated_time_minutes": 0            // estimated teaching/reading time
+      "suggested_questions": 0,              
+      "estimated_time_minutes": 0            
     }
   ],
   "assessment_strategy": {
@@ -80,6 +81,7 @@ INSTRUCTIONS:
 - No citations, no references.
 """
 
+
 def _build_prompt(
     level: str,
     style: str,
@@ -90,6 +92,7 @@ def _build_prompt(
     topics_block = "\n".join(f"- {t}" for t in topics)
     desc_block = (description or "").strip() or "none"
     return f"{_PLAN_TEMPLATE.format(level=level, style=style, language=language, topics_block=topics_block, desc_block=desc_block)}\n\n{_SCHEMA}"
+
 
 # =========================
 # JSON helpers
@@ -105,22 +108,19 @@ def _json_sanitize(s: str) -> Dict[str, Any]:
         return json.loads(s[start:end + 1])
     raise ValueError("LLM did not return valid JSON.")
 
+
 def _coerce_int(x, default=0) -> int:
     try:
         return int(round(float(x)))
     except Exception:
         return default
 
+
 def _normalize_weights(plan: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Ensure subtopic weights are ints and sum to 100.
-    If sum is 0, distribute evenly.
-    """
     subs = plan.get("subtopics") or []
     if not isinstance(subs, list) or not subs:
         return plan
 
-    # Coerce to ints >=0
     weights = []
     for s in subs:
         w = _coerce_int(s.get("weight", 0), default=0)
@@ -135,7 +135,6 @@ def _normalize_weights(plan: Dict[str, Any]) -> Dict[str, Any]:
         return plan
 
     if total == 0:
-        # Even split
         even = [100 // n] * n
         remainder = 100 - sum(even)
         for i in range(remainder):
@@ -144,7 +143,6 @@ def _normalize_weights(plan: Dict[str, Any]) -> Dict[str, Any]:
             s["weight"] = w
         return plan
 
-    # Rescale proportionally
     scaled = []
     running = 0
     for i, w in enumerate(weights):
@@ -153,12 +151,12 @@ def _normalize_weights(plan: Dict[str, Any]) -> Dict[str, Any]:
             scaled.append(new_w)
             running += new_w
         else:
-            # last one takes the remainder to ensure exact 100
             scaled.append(100 - running)
 
     for s, w in zip(subs, scaled):
         s["weight"] = w
     return plan
+
 
 # =========================
 # Public API
@@ -171,20 +169,6 @@ def generate_plan(
     language: str = "en",
     model_name: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Create a detailed, weighted content plan for teacher approval.
-
-    Args:
-      level: "beginner" | "intermediate" | "advanced"
-      style: "concise" | "detailed" | "exam-prep"
-      topics: str or list[str] (one or multiple topics)
-      description: optional teacher notes
-      language: output language (default "en")
-      model_name: override Gemini model; defaults to cfg.LLM_MODEL_NAME
-
-    Returns:
-      dict with fields described in _SCHEMA, weights normalized to sum 100.
-    """
     if isinstance(topics, str):
         topics_list = [t.strip() for t in topics.split(",") if t.strip()] if ("," in topics) else [topics.strip()]
     else:
@@ -196,35 +180,36 @@ def generate_plan(
         raise RuntimeError("GOOGLE_API_KEY missing. Set it in your environment/.env.")
 
     genai.configure(api_key=cfg.GOOGLE_API_KEY)
-    model = genai.GenerativeModel(model_name or getattr(cfg, "LLM_MODEL_NAME", "gemini-2.5-flash"),
-                                  system_instruction=_SYSTEM_PROMPT)
+
+    # ✅ updated: no system_instruction in init
+    model = genai.GenerativeModel(model_name or getattr(cfg, "LLM_MODEL_NAME", "gemini-2.5-flash"))
 
     prompt = _build_prompt(level=level, style=style, topics=topics_list, language=language, description=description)
-    resp = model.generate_content(prompt)
+
+    # ✅ updated: add system role inside generate_content
+    resp = model.generate_content([
+        {"role": "model", "parts": _SYSTEM_PROMPT},
+        {"role": "user", "parts": prompt}
+    ])
+
     raw = (resp.text or "").strip()
     data = _json_sanitize(raw)
 
-    # Backfill/ensure fields
     data.setdefault("level", level)
     data.setdefault("style", style)
     data.setdefault("language", language)
     data.setdefault("topics", topics_list)
 
-    # Normalize weights
     data = _normalize_weights(data)
 
-    # Coerce numeric fields for safety
     for s in data.get("subtopics") or []:
         s["weight"] = _coerce_int(s.get("weight", 0), default=0)
         s["suggested_questions"] = _coerce_int(s.get("suggested_questions", 0), default=0)
         s["estimated_time_minutes"] = _coerce_int(s.get("estimated_time_minutes", 0), default=0)
-
-        # ensure list fields exist
         s.setdefault("learning_outcomes", [])
         s.setdefault("key_terms", [])
         s.setdefault("suggested_examples", [])
 
-    # Ensure top-level fields exist
     data.setdefault("planner_notes", "")
     data.setdefault("overall_objectives", [])
     data.setdefault("assessment_strategy", {"format": ["mcqs"], "notes": ""})

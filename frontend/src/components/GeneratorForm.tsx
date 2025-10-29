@@ -413,6 +413,7 @@
 
 // export default GeneratorForm;
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -440,6 +441,7 @@ interface GeneratorFormProps {
 }
 
 const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormProps) => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState<GeneratorFormData>({
     topic: "",
     description: "",
@@ -448,17 +450,24 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
     style: "detailed",
   });
   const [apiLoading, setApiLoading] = useState(false);
-  const [apiResponse, setApiResponse] = useState<any>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
-    
-  
+    // If parent provided onSubmit, use that
+    // if (onSubmit) {
+    //   onSubmit(formData);
+    //   return;
+    // }
+
+    // Validate required fields
+    if (!formData.topic.trim()) {
+      setApiError("Topic name is required");
+      return;
+    }
 
     // Otherwise, call the API directly
     setApiLoading(true);
     setApiError(null);
-    setApiResponse(null);
 
     try {
       const payload = {
@@ -467,7 +476,6 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
         topics: formData.topic,
         description: formData.description,
         language: "en",
-        model_name: "gpt-4" // You can make this configurable
       };
 
       const response = await fetch("http://localhost:5000/api/plan/generate", {
@@ -484,7 +492,17 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
         throw new Error(result.message || "Failed to generate plan");
       }
 
-      setApiResponse(result);
+      // Store the API response and form data in sessionStorage
+      sessionStorage.setItem("generatedPlan", JSON.stringify(result.data));
+      sessionStorage.setItem("generatorData", JSON.stringify({
+        topic: formData.topic,
+        description: formData.description,
+        level: formData.level,
+        style: formData.style,
+      }));
+
+      // Navigate to plan editor
+      navigate("/plan-editor");
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "An error occurred");
     } finally {
@@ -502,8 +520,8 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
         <div className="space-y-6">
           {/* Topic */}
           <div className="space-y-2">
-            <Label htmlFor="topic" className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-blue-600" />
+            <Label htmlFor="topic" className="flex items-center gap-2 text-slate-200">
+              <FileText className="h-4 w-4 text-blue-400" />
               Topic Name *
             </Label>
             <Input
@@ -512,27 +530,29 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
               value={formData.topic}
               onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
               required
-              className="bg-slate-800/50 border-slate-700 text-white"
+              className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-400"
             />
           </div>
 
           {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="description">Topic Description</Label>
+            <Label htmlFor="description" className="text-slate-200">
+              Topic Description
+            </Label>
             <Textarea
               id="description"
               placeholder="Provide more details about your topic..."
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="bg-slate-800/50 border-slate-700 text-white"
+              className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-400 min-h-24"
             />
           </div>
 
           {/* YouTube Link */}
           {showYouTube && (
             <div className="space-y-2">
-              <Label htmlFor="youtube" className="flex items-center gap-2">
-                <Youtube className="h-4 w-4 text-blue-600" />
+              <Label htmlFor="youtube" className="flex items-center gap-2 text-slate-200">
+                <Youtube className="h-4 w-4 text-blue-400" />
                 YouTube Link {variant !== "youtube" && "(Optional)"}
               </Label>
               <Input
@@ -542,7 +562,7 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
                 value={formData.youtubeLink}
                 onChange={(e) => setFormData({ ...formData, youtubeLink: e.target.value })}
                 required={variant === "youtube"}
-                className="bg-slate-800/50 border-slate-700 text-white"
+                className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-400"
               />
             </div>
           )}
@@ -550,8 +570,8 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
           {/* Documents */}
           {showDocuments && (
             <div className="space-y-2">
-              <Label htmlFor="documents" className="flex items-center gap-2">
-                <Upload className="h-4 w-4 text-blue-600" />
+              <Label htmlFor="documents" className="flex items-center gap-2 text-slate-200">
+                <Upload className="h-4 w-4 text-blue-400" />
                 Upload Documents {variant !== "document" && "(Optional)"}
               </Label>
               <div className="border-2 border-dashed border-slate-700 rounded-lg p-6 text-center hover:border-blue-400 transition-colors bg-slate-800/30">
@@ -574,6 +594,7 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
                   variant="outline"
                   size="sm"
                   onClick={() => document.getElementById("documents")?.click()}
+                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
                 >
                   Select Files
                 </Button>
@@ -588,7 +609,9 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
 
           {/* Level */}
           <div className="space-y-2">
-            <Label htmlFor="level">Difficulty Level *</Label>
+            <Label htmlFor="level" className="text-slate-200">
+              Difficulty Level *
+            </Label>
             <Select
               value={formData.level}
               onValueChange={(value: Level) => setFormData({ ...formData, level: value })}
@@ -596,17 +619,19 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
               <SelectTrigger className="bg-slate-800/50 border-slate-700 text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="beginner">Beginner</SelectItem>
-                <SelectItem value="intermediate">Intermediate</SelectItem>
-                <SelectItem value="advanced">Advanced</SelectItem>
+              <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectItem value="beginner" className="text-white">Beginner</SelectItem>
+                <SelectItem value="intermediate" className="text-white">Intermediate</SelectItem>
+                <SelectItem value="advanced" className="text-white">Advanced</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* Style */}
           <div className="space-y-2">
-            <Label htmlFor="style">Presentation Style *</Label>
+            <Label htmlFor="style" className="text-slate-200">
+              Presentation Style *
+            </Label>
             <Select
               value={formData.style}
               onValueChange={(value: Style) => setFormData({ ...formData, style: value })}
@@ -614,10 +639,10 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
               <SelectTrigger className="bg-slate-800/50 border-slate-700 text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="concise">Concise</SelectItem>
-                <SelectItem value="detailed">Detailed</SelectItem>
-                <SelectItem value="exam-prep">Exam Preparation</SelectItem>
+              <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectItem value="concise" className="text-white">Concise</SelectItem>
+                <SelectItem value="detailed" className="text-white">Detailed</SelectItem>
+                <SelectItem value="exam-prep" className="text-white">Exam Preparation</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -634,20 +659,11 @@ const GeneratorForm = ({ variant, onSubmit, isLoading = false }: GeneratorFormPr
         </div>
       </Card>
 
-      {/* API Response */}
+      {/* API Error */}
       {apiError && (
-        <Card className="p-6 bg-red-50 border-red-200">
-          <h3 className="text-lg font-semibold text-red-900 mb-2">Error</h3>
-          <p className="text-red-700">{apiError}</p>
-        </Card>
-      )}
-
-      {apiResponse && (
-        <Card className="p-6 bg-green-50 border-green-200">
-          <h3 className="text-lg font-semibold text-green-900 mb-2">Success!</h3>
-          <pre className="text-sm text-green-800 overflow-auto bg-slate-800/50 p-4 rounded border border-slate-700">
-            {JSON.stringify(apiResponse, null, 2)}
-          </pre>
+        <Card className="p-6 bg-red-900/20 border-red-500/30">
+          <h3 className="text-lg font-semibold text-red-400 mb-2">Error</h3>
+          <p className="text-red-300">{apiError}</p>
         </Card>
       )}
     </div>
