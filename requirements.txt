@@ -46,6 +46,7 @@
 Flask
 python-dotenv
 requests
+translators
 
 # YouTube transcripts + splitting
 youtube-transcript-api

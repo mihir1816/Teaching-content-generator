@@ -19,6 +19,7 @@ from app.services.pinecone_index import ensure_index, upsert_chunks
 from app.services.generate_queries import generate_queries_from_plan
 from app.services.retriever import retrieve_from_queries
 from app.services.generator import generate_all
+from app.services.ppt_builder import build_ppt_from_result
 
 import app.config as cfg
 import logging
@@ -87,7 +88,7 @@ def run_pipeline(
         sources: Dictionary containing:
             - videos: List of YouTube URLs
             - articles: List of web article URLs
-            - files: List of FileStorage objects (uploaded files)
+            - files: List of FileStorage objects (from controller)
         plan_text: Learning plan description
         topics: List of topics to cover
         level: Learning level (beginner/intermediate/advanced)
@@ -107,12 +108,15 @@ def run_pipeline(
     else:
         final_k = 8
 
-    # Extract sources
+    # Extract sources (This matches your controller)
     video_urls = sources.get("videos", [])
     article_urls = sources.get("articles", [])
     file_storages = sources.get("files", [])
     
-    logger.info(f"Processing {len(video_urls)} videos, {len(article_urls)} articles, {len(file_storages)} files")
+    logger.info(
+        f"Processing {len(video_urls)} videos, {len(article_urls)} articles, "
+        f"{len(file_storages)} files"
+    )
 
     # Create a combined namespace
     source_hash = hashlib.md5(
@@ -145,6 +149,7 @@ def run_pipeline(
                 })
                 logger.info(f"  Added {len(chunks)} chunks from video")
         except Exception as e:
+            # THIS IS LIKELY THE ISSUE: Check logs for this error
             logger.error(f"Failed to process video {video_url}: {e}")
 
     # Process web articles
@@ -173,16 +178,15 @@ def run_pipeline(
     for idx, file_storage in enumerate(file_storages):
         try:
             logger.info(f"Processing file {idx + 1}/{len(file_storages)}: {file_storage.filename}")
+            # process_file_storage receives the FileStorage object directly
             file_result = process_file_storage(file_storage)
             
-            # Extract text using the helper function
             file_text = _extract_text_from_file_result(file_result)
             
             if file_text:
                 chunks = make_chunks(file_text)
                 all_chunks.extend(chunks)
                 
-                # Extract metadata if available
                 if isinstance(file_result, dict):
                     file_metadata = file_result.get("metadata", {})
                     extraction_method = file_result.get("extraction_method", "unknown")
@@ -205,12 +209,14 @@ def run_pipeline(
                 logger.warning(f"No text extracted from file {file_storage.filename}")
                 
         except Exception as e:
+            # THIS IS LIKELY THE OTHER ISSUE: Check logs for this error
             logger.error(f"Failed to process file {file_storage.filename}: {e}")
             import traceback
             logger.error(traceback.format_exc())
 
     if not all_chunks:
-        raise ValueError("No content could be extracted from any source")
+        # If all sources failed, this error will be raised.
+        raise ValueError("No content could be extracted from any source. Check logs for errors.")
 
     logger.info(f"Total chunks collected: {len(all_chunks)}")
 
@@ -258,14 +264,29 @@ def run_pipeline(
         model_name=getattr(cfg, "LLM_MODEL_NAME", "gemini-1.5-flash"),
     )
 
+    # Build PPT
+    logger.info("Building PPT...")
+    try:
+        ppt_path = build_ppt_from_result(result)
+        logger.info(f"  PPT saved -> {ppt_path}")
+        result["_ppt_path"] = str(ppt_path)
+    except Exception as e:
+        logger.warning(f"  PPT generation failed: {e}")
+        result["_ppt_path"] = None
+
     # Add source metadata to result
     result["source_metadata"] = source_metadata
     result["namespace"] = namespace
+    
+    # --- FIX: Removed the trailing underscore ---
     result["total_chunks"] = len(all_chunks)
 
     # Save results
     out_dir = Path(cfg.DATA_PATH) / "outputs"
-    _save_json(result, out_dir / f"combined_{source_hash}_results.json")
-    logger.info(f"Results saved to combined_{source_hash}_results.json")
+    out_file = out_dir / f"combined_{source_hash}_results.json"
+    _save_json(result, out_file)
+    logger.info(f"Results saved to {out_file}")
+    
+    result["_output_path"] = str(out_file)
 
     return result

@@ -12,3 +12,4 @@ def run_pipeline():
     Endpoint to run the combined sources pipeline.
     """
     return run_pipeline_controller()
+    

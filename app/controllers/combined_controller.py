@@ -11,16 +11,20 @@ logger = logging.getLogger(__name__)
 def run_pipeline_controller():
     """
     Handle POST request for combined pipeline.
-    Accepts multipart/form-data with:
-    - videos: JSON array of YouTube URLs (form field)
-    - articles: JSON array of article URLs (form field)
-    - files: Multiple file uploads (form field, can be multiple)
-    - plan_text: Learning plan text (form field)
-    - topics: JSON array of topics (form field)
-    - level: Learning level (form field, default: beginner)
-    - style: Content style (form field, default: concise)
+    ...
     """
     try:
+        # --- START: ADDED DEBUG PRINT STATEMENTS ---
+        print("\n" + "="*50)
+        print("DEBUGGING RAW FORM DATA RECEIVED BY FLASK:")
+        print(f"  > request.form.get('videos'):   {request.form.get('videos')}")
+        print(f"  > request.form.get('articles'): {request.form.get('articles')}")
+        print(f"  > request.form.get('topics'):   {request.form.get('topics')}")
+        print(f"  > request.form.get('plan_text'): {request.form.get('plan_text')}")
+        print(f"  > request.files.getlist('files'): {request.files.getlist('file')}")
+        print("="*50 + "\n")
+        # --- END: ADDED DEBUG PRINT STATEMENTS ---
+        
         # Get form fields
         videos_str = request.form.get('videos', '[]')
         articles_str = request.form.get('articles', '[]')

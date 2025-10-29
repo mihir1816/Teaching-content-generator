@@ -13,7 +13,6 @@ except Exception as e:
         "google-generativeai is required. Install with:\n  pip install google-generativeai"
     ) from e
 
-
 # =========================
 # System style (no citations)
 # =========================
@@ -52,13 +51,13 @@ _SCHEMA_NOTES = """Return JSON ONLY with this schema:
   "summary": "string",                         // 3–6 sentences
   "key_points": ["string", "..."],             // 5–10 concise bullets
   "sections": [
-    {"title": "string", "bullets": ["string", "..."]}  // 3–6 bullets
+    {"title": "string", "bullets": ["string", "..."]}  // 4–6 bullets
   ],
   "glossary": [
-    {"term": "string", "definition": "string"}         // 5–10 entries
+    {"term": "string", "definition": "string"}         // 5–7 entries
   ],
   "misconceptions": [
-    {"statement": "string", "correction": "string"}    // 1–3 entries
+    {"statement": "string", "correction": "string"}    // 1–2 entries
   ]
 }
 """
@@ -119,16 +118,16 @@ def _pack_context(hits: List[Dict[str, Any]], max_context_chars: int = 6000) -> 
 def _build_prompt(objective: str, topic: str, level: str, style: str, language: str, context_block: str) -> str:
     task = _TASK_TEMPLATE.format(topic=topic, level=level, style=style, language=language)
     schema = _SCHEMA_NOTES if objective == "notes" else (_SCHEMA_SUMMARY if objective == "summary" else _SCHEMA_MCQS)
-    # Concatenate carefully; system instruction is injected via system_instruction (Gemini supports it)
-    return f"OBJECTIVE: {objective}\n\n{task}\n\n{context_block}\n\n{schema}"
-
+    # Include system prompt in the user prompt instead
+    return f"{_SYSTEM_PROMPT}\n\nOBJECTIVE: {objective}\n\n{task}\n\n{context_block}\n\n{schema}"
 
 # =========================
 # Gemini call + JSON guard
 # =========================
 def _gemini_call(prompt: str, model_name: str) -> str:
     genai.configure(api_key=cfg.GOOGLE_API_KEY)
-    model = genai.GenerativeModel(model_name, system_instruction=_SYSTEM_PROMPT)
+    # Remove system_instruction parameter - include system prompt in the main prompt instead
+    model = genai.GenerativeModel(model_name)
     resp = model.generate_content(prompt)
     return (resp.text or "").strip()
 
@@ -161,7 +160,7 @@ def generate_all(
     final_k: int = 8,
     max_context_chars: int = 6000,
     model_name: str | None = None,
-    mcq_count: int = 8
+    mcq_count: int = 4
 ) -> Dict[str, Any]:
     """
     Produce all three objectives (notes, summary, mcqs) without any citations.

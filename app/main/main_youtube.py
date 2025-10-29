@@ -95,17 +95,6 @@ def run_pipeline(
     _save_json({"plan": plan_text, "queries": queries, "level": level, "style": style},
                out_dir / f"{video_id}_plan_queries.json")
 
-    # 7) Retrieve (dense RAG)
-    print(">>> Retrieving top context (dense) ...")
-    hits = retrieve_from_queries(
-        namespace=namespace,
-        queries=queries,
-        per_query_k=5,
-        final_k=final_k,
-        include_text=True,
-    )
-    print(f"    fused hits: {len(hits)}")
-
     # 8) Generate Notes → Summary → MCQs (Gemini, no citations)
     print(">>> Generating Notes, Summary, MCQs (Gemini) ...")
     result = generate_all(
