@@ -8,18 +8,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 def run_pipeline_controller():
-    """
-    HTTP endpoint to run article pipeline.
-
-    Expected JSON body:
-    {
-        "url": "https://example.com/article",
-        "plan_text": "Generate concise notes and 5 MCQs for Newton's laws.",
-        "topics": ["Newton's Laws of Motion", "Force and Inertia"],
-        "level": "10th Grade",
-        "style": "concise"
-    }
-    """
     try:
         data = request.get_json()
         if not data:

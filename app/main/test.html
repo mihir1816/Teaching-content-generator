@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test Page</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-6 text-gray-800">API Test Page</h1>
+        <h2 class="text-lg font-semibold mb-2 text-gray-700">Combined Pipeline</h2>
+        <p class="text-sm text-gray-500 mb-6">This form sends a `multipart/form-data` request to your backend.</p>
+
+        <!-- The 'action' and 'method' are handled by JavaScript -->
+        <form id="upload-form" class="space-y-6">
+
+            <!-- videos -->
+            <div>
+                <label for="videos" class="block text-sm font-medium text-gray-700">Videos (JSON array)</label>
+                <textarea id="videos" name="videos" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">["https://www.youtube.com/watch?v=aEDCHQ-Yqzk"]</textarea>
+            </div>
+
+            <!-- articles -->
+            <div>
+                <label for="articles" class="block text-sm font-medium text-gray-700">Articles (JSON array)</label>
+                <textarea id="articles" name="articles" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">["https://byjus.com/ncert-solutions-class-10-maths/chapter-2-polynomials/"]</textarea>
+            </div>
+
+            <!-- files -->
+            <div>
+                <label for="files" class="block text-sm font-medium text-gray-700">Files</label>
+                <input type="file" id="files" name="files" multiple class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
+            </div>
+
+            <!-- topics -->
+            <div>
+                <label for="topics" class="block text-sm font-medium text-gray-700">Topics (JSON array)</label>
+                <input type="text" id="topics" name="topics" value='["Polynomials","Maths"]' class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+            </div>
+
+            <!-- level -->
+            <div>
+                <label for="level" class="block text-sm font-medium text-gray-700">Level</label>
+                <input type="text" id="level" name="level" value="intermediate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+            </div>
+
+            <!-- style -->
+            <div>
+                <label for="style" class="block text-sm font-medium text-gray-700">Style</label>
+                <input type="text" id="style" name="style" value="detailed" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+            </div>
+
+            <!-- plan_text -->
+            <div>
+                <label for="plan_text" class="block text-sm font-medium text-gray-700">Plan Text</label>
+                <textarea id="plan_text" name="plan_text" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">Generate detailed notes for polynomials using given videos , article , and file</textarea>
+            </div>
+
+            <!-- Submit Button -->
+            <div>
+                <button type="submit" id="submit-btn" class="w-full inline-flex justify-center py-3 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Generate Content
+                </button>
+            </div>
+        </form>
+
+        <!-- Response Area -->
+        <div class="mt-8">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">Response</h3>
+            <pre id="response-area" class="bg-gray-900 text-white p-4 rounded-md text-sm overflow-x-auto whitespace-pre-wrap">Waiting for request...</pre>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('upload-form');
+        const responseArea = document.getElementById('response-area');
+        const submitBtn = document.getElementById('submit-btn');
+        
+        // This is the URL your Postman was pointed to
+        const API_URL = 'http://127.0.0.1:5000/api/combined_pipeline/run_combined_pipeline';
+
+        form.addEventListener('submit', async (event) => {
+            // Prevent the default form submission
+            event.preventDefault();
+
+            // Show loading state
+            responseArea.textContent = 'Loading...';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Generating...';
+
+            // Create a FormData object from the form.
+            // This automatically handles 'multipart/form-static'
+            const formData = new FormData(form);
+
+            try {
+                // Send the request
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData
+                    // DO NOT set Content-Type header. 
+                    // The browser will set it automatically with the correct 'boundary'
+                });
+
+                // Get the JSON response
+                const result = await response.json();
+
+                // Display the response nicely
+                if (response.ok) {
+                    responseArea.style.color = '#10B981'; // Green
+                    responseArea.textContent = JSON.stringify(result, null, 2);
+                } else {
+                    responseArea.style.color = '#EF4444'; // Red
+                    responseArea.textContent = JSON.stringify(result, null, 2);
+                }
+
+            } catch (error) {
+                // Handle network errors
+                console.error('Fetch error:', error);
+                responseArea.style.color = '#EF4444'; // Red
+                responseArea.textContent = `Network Error: ${error.message}\n\nIs the server running at ${API_URL}?`;
+            } finally {
+                // Restore button
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Content';
+            }
+        });
+    </script>
+</body>
+</html>

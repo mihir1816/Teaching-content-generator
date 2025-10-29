@@ -64,7 +64,17 @@ def run_pipeline(
     pages = extraction_result.get("pages", [])
     file_text = "\n\n".join([p.get("text", "") for p in pages if p.get("text")])
     
-    filename = extraction_result['metadata']['file_name']
+    metadata = extraction_result.get('metadata')
+    filename = None
+
+    if metadata and 'file_name' in metadata:
+        filename = metadata['file_name']
+    else:
+        # Log a warning or set a default
+        print("WARNING: 'file_name' was not found in extraction_result['metadata']")
+        filename = 'unknown_file_from_fallback'
+
+    # Now you can safely use the 'filename' variable
     file_hash = hashlib.md5(filename.encode()).hexdigest()[:8]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     namespace = f"file:{file_hash}:{timestamp}"
@@ -103,16 +113,16 @@ def run_pipeline(
     _save_json({"plan": plan_text, "queries": queries, "level": level, "style": style},
                out_dir / f"{file_hash}_plan_queries.json")
 
-    # 6) Retrieve (dense RAG)
-    print(">>> Retrieving top context (dense) ...")
-    hits = retrieve_from_queries(
-        namespace=namespace,
-        queries=queries,
-        per_query_k=5,
-        final_k=final_k,
-        include_text=True,
-    )
-    print(f"    fused hits: {len(hits)}")
+    # # 6) Retrieve (dense RAG)
+    # print(">>> Retrieving top context (dense) ...")
+    # hits = retrieve_from_queries(
+    #     namespace=namespace,
+    #     queries=queries,
+    #     per_query_k=5,
+    #     final_k=final_k,
+    #     include_text=True,
+    # )
+    # print(f"    fused hits: {len(hits)}")
 
     # 7) Generate Notes → Summary → MCQs (Gemini, no citations)
     print(">>> Generating Notes, Summary, MCQs (Gemini) ...")
