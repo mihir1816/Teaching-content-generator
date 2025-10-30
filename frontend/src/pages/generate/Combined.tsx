@@ -127,7 +127,10 @@ const Combined = () => {
 
   const handleEditPlan = async () => {
     const validTopics = formData.topics.filter(t => t.trim());
-
+  if (!validTopics.length) {
+      toast.error("Please enter at least one topic");
+      return;
+    }
     if (!userEdits.trim()) {
       toast.error("Please enter your edits");
       return;
@@ -136,8 +139,11 @@ const Combined = () => {
     setPlanLoading(true);
     try {
       const result = await apiService.editPlan({
-        plan_text: planText,
-        user_edits: userEdits,
+        topics: validTopics.join(", "),
+        description: formData.description,
+        level: formData.level,
+        style: formData.style,
+        language: formData.language,
       });
       setPlanText(result.updated_plan || result.response || JSON.stringify(result));
       setUserEdits("");
