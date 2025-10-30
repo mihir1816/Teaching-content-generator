@@ -33,6 +33,7 @@ def generate_plan_controller():
         }), 200
 
     except Exception as e:
+        print(e)
         return jsonify({
             "success": False,
             "message": str(e)

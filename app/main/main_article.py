@@ -130,8 +130,24 @@ def run_pipeline(
         model_name=getattr(cfg, "LLM_MODEL_NAME", "gemini-1.5-flash"),
     )
     
-    ppt_path = build_ppt_from_result(result)
+    print(">>> Building PPT...")
+    try:
+        ppt_path = build_ppt_from_result(result)
+        print(f"    PPT saved -> {ppt_path}")
+    except Exception as e:
+        print(f"    PPT generation failed: {e}")
+        ppt_path = None
+
+    # Attach ppt path to the result so controllers can extract filename for download
+    try:
+        result["_ppt_path"] = str(ppt_path) if ppt_path is not None else None
+    except Exception:
+        # If result is not a dict, skip attaching
+        pass
 
     _save_json(result, out_dir / f"{url_hash}_results.json")
     print(f"    results saved -> {out_dir / (url_hash + '_results.json')}")
     print(">>> Done.")
+
+    # Return result for controllers to use
+    return result

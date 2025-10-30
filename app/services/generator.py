@@ -14,21 +14,22 @@ except Exception as e:
     ) from e
 
 # =========================
-# System style (no citations)
+# System style (enhanced pedagogy, analogies, and completeness)
 # =========================
-_SYSTEM_PROMPT = """You are "Classroom Coach", a patient pedagogue who explains clearly and accurately.
+_SYSTEM_PROMPT = """You are "Classroom Coach", a patient, knowledgeable, and engaging teacher.
 
 PRINCIPLES:
-- Write as a supportive teacher: clear, structured, and concise.
-- Use only the Context Snippets given; do not assume outside knowledge.
-- If something is not in the context, avoid making it up; say "insufficient information."
-- Do NOT include any citations, IDs, or references in the output.
-- Output MUST be valid JSON that matches the requested schema exactly, with no extra text.
+- Write like a supportive educator: clear, structured, and insightful.
+- Always ensure a logical and natural flow between ideas.
+- Use the provided Context Snippets as the base, but you may add general or external knowledge to make the topic complete and meaningful.
+- Avoid citations, IDs, or reference markers in the output.
+- Use real-world analogies or relatable examples wherever possible to make complex ideas easier to grasp.
+- Each section should be concise (around 10–12 lines) so that it can fit comfortably on one presentation slide.
+- Explanations should feel like a smooth classroom lecture, not fragmented notes.
 """
 
-
 # =========================
-# Task templates & schemas (no citation fields)
+# Task templates & schemas (enhanced with analogies, depth, and section control)
 # =========================
 _TASK_TEMPLATE = """TOPIC: {topic}
 LEVEL: {level}
@@ -36,11 +37,22 @@ STYLE: {style}
 LANGUAGE: {language}
 
 INSTRUCTIONS:
-- Produce high-quality content tailored to LEVEL and STYLE.
-- Rely on Context Snippets. If information is missing, write "insufficient information."
-- No citations or chunk IDs in the output.
+- Produce high-quality educational content suited for the given LEVEL and STYLE.
+- Ensure the content follows a logical and natural teaching flow:
+  1. Why this topic is important or needed.
+  2. What the topic is (definition and explanation).
+  3. Subtypes, components, or variations (if any).
+  4. How it works or is applied.
+  5. Real-world examples or analogies (to enhance understanding).
+  6. Summary or conclusion to reinforce learning.
+- You may use general or external knowledge to make the content accurate, coherent, and meaningful.
+- Do NOT include citations, IDs, or references in the output.
+- Keep each section concise (10–12 lines max) and clear enough to fit a single slide.
 """
 
+# =========================
+# Notes Schema (detailed, structured, with analogies)
+# =========================
 _SCHEMA_NOTES = """Return JSON ONLY with this schema:
 {
   "topic": "string",
@@ -48,20 +60,29 @@ _SCHEMA_NOTES = """Return JSON ONLY with this schema:
   "level": "string",
   "language": "string",
   "style": "string",
-  "summary": "string",                         // 3–6 sentences
-  "key_points": ["string", "..."],             // 5–10 concise bullets
+  "summary": "string",                         
+  "key_points": ["string", "..."],             
   "sections": [
-    {"title": "string", "bullets": ["string", "..."]}  // 4–6 bullets
+    {"title": "string", "bullets": ["string", "..."]}  
   ],
   "glossary": [
-    {"term": "string", "definition": "string"}         // 5–7 entries
+    {"term": "string", "definition": "string"}         
   ],
   "misconceptions": [
-    {"statement": "string", "correction": "string"}    // 1–2 entries
+    {"statement": "string", "correction": "string"}    
   ]
 }
+
+NOTES:
+- Include 7–10 well-structured sections covering the topic in depth.
+- Each section should have around 10–12 informative lines, keeping it detailed yet presentation-friendly.
+- Maintain clear progression between sections so the content reads like a guided explanation.
+- Use analogies or relatable real-world examples when they enhance understanding.
 """
 
+# =========================
+# Summary Schema (clear, standalone overview)
+# =========================
 _SCHEMA_SUMMARY = """Return JSON ONLY with this schema:
 {
   "topic": "string",
@@ -69,11 +90,18 @@ _SCHEMA_SUMMARY = """Return JSON ONLY with this schema:
   "level": "string",
   "language": "string",
   "style": "string",
-  "summary": "string",                      // 5–8 tight sentences
-  "key_points": ["string", "..."]           // 5–10 bullets
+  "summary": "string",                      
+  "key_points": ["string", "..."]           
 }
+
+NOTES:
+- The summary should feel complete and standalone, covering the topic concisely.
+- Highlight main ideas, ensure conceptual clarity, and use simple real-world analogies when helpful.
 """
 
+# =========================
+# MCQ Schema (uses known or high-quality conceptual questions)
+# =========================
 _SCHEMA_MCQS = """Return JSON ONLY with this schema:
 {
   "topic": "string",
@@ -90,8 +118,17 @@ _SCHEMA_MCQS = """Return JSON ONLY with this schema:
     }
   ]
 }
-"""
 
+NOTES:
+- First, attempt to locate or adapt high-quality, well-known MCQs related to the topic from trusted educational sources available on the internet (without citing them).
+- If suitable MCQs are not available, generate original, exam-quality MCQs that assess higher-order thinking:
+  - Mix conceptual, applied, reasoning-based, and numerical/problem-solving questions.
+  - Avoid trivial recall-type questions.
+  - Ensure logical distractors (plausible wrong answers).
+  - Provide clear, concise explanations that teach the reasoning behind the correct answer.
+- Maintain a balanced difficulty distribution: ~30% easy, 40% medium, and 30% challenging.
+- Avoid any citations, source mentions, or URLs in the output.
+"""
 
 # =========================
 # Context packing (no IDs, just text)

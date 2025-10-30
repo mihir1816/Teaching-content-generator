@@ -1,126 +1,184 @@
-"""
-Controller for combined sources (YouTube + Articles + Files) teaching content generation.
-"""
+# """
+# Controller for combined sources (YouTube + Articles + Files) teaching content generation.
+# """
+# from flask import request, jsonify
+# import logging
+# import json
+# from app.main.main_combined import run_pipeline
+
+# logger = logging.getLogger(__name__)
+
+# def run_pipeline_controller():
+#     """
+#     Handle POST request for combined pipeline.
+#     ...
+#     """
+#     try:
+#         # --- START: ADDED DEBUG PRINT STATEMENTS ---
+#         print("\n" + "="*50)
+#         print("DEBUGGING RAW FORM DATA RECEIVED BY FLASK:")
+#         print(f"  > request.form.get('videos'):   {request.form.get('videos')}")
+#         print(f"  > request.form.get('articles'): {request.form.get('articles')}")
+#         print(f"  > request.form.get('topics'):   {request.form.get('topics')}")
+#         print(f"  > request.form.get('plan_text'): {request.form.get('plan_text')}")
+#         print(f"  > request.files.getlist('files'): {request.files.getlist('file')}")
+#         print("="*50 + "\n")
+#         # --- END: ADDED DEBUG PRINT STATEMENTS ---
+        
+#         # Get form fields
+#         videos_str = request.form.get('videos', '[]')
+#         articles_str = request.form.get('articles', '[]')
+#         plan_text = request.form.get('plan_text')
+#         topics_str = request.form.get('topics')
+#         level = request.form.get('level', 'beginner')
+#         style = request.form.get('style', 'concise')
+        
+#         # Get uploaded files
+#         uploaded_files = request.files.getlist('files')
+        
+#         # Validate at least one source is provided
+#         if not videos_str.strip() and not articles_str.strip() and not uploaded_files:
+#             return jsonify({
+#                 "status": "error",
+#                 "message": "At least one source (videos, articles, or files) must be provided"
+#             }), 400
+        
+#         # Parse JSON strings
+#         try:
+#             videos = json.loads(videos_str) if videos_str.strip() else []
+#             articles = json.loads(articles_str) if articles_str.strip() else []
+#             topics = json.loads(topics_str) if topics_str else []
+#         except json.JSONDecodeError as e:
+#             return jsonify({
+#                 "status": "error",
+#                 "message": f"Invalid JSON format: {str(e)}"
+#             }), 400
+        
+#         # Validate required fields
+#         if not plan_text:
+#             return jsonify({
+#                 "status": "error",
+#                 "message": "Missing required field: plan_text"
+#             }), 400
+        
+#         if not topics or not isinstance(topics, list):
+#             return jsonify({
+#                 "status": "error",
+#                 "message": "topics must be a non-empty list"
+#             }), 400
+        
+#         # Validate list types
+#         if not isinstance(videos, list):
+#             return jsonify({
+#                 "status": "error",
+#                 "message": "videos must be a list"
+#             }), 400
+        
+#         if not isinstance(articles, list):
+#             return jsonify({
+#                 "status": "error",
+#                 "message": "articles must be a list"
+#             }), 400
+        
+#         logger.info(f"Processing combined sources:")
+#         logger.info(f"  Videos: {len(videos)}")
+#         logger.info(f"  Articles: {len(articles)}")
+#         logger.info(f"  Files: {len(uploaded_files)}")
+#         logger.info(f"Plan: {plan_text}")
+#         logger.info(f"Topics: {topics}")
+#         logger.info(f"Level: {level}, Style: {style}")
+        
+#         # Build sources dictionary
+#         sources = {
+#             "videos": videos,
+#             "articles": articles,
+#             "files": uploaded_files  # Pass FileStorage objects directly
+#         }
+        
+#         # Call the main pipeline function
+#         result = run_pipeline(
+#             sources=sources,
+#             plan_text=plan_text,
+#             topics=topics,
+#             level=level,
+#             style=style
+#         )
+        
+#         return jsonify({
+#             "status": "success",
+#             "data": result
+#         }), 200
+        
+#     except ValueError as e:
+#         logger.error(f"Validation error: {str(e)}")
+#         return jsonify({
+#             "status": "error",
+#             "message": str(e)
+#         }), 400
+        
+#     except Exception as e:
+#         logger.error(f"Pipeline error: {str(e)}")
+#         import traceback
+#         logger.error(traceback.format_exc())
+#         return jsonify({
+#             "status": "error",
+#             "message": f"Pipeline failed: {str(e)}"
+#         }), 500
 from flask import request, jsonify
-import logging
-import json
+import logging, json
+from pathlib import Path
 from app.main.main_combined import run_pipeline
 
 logger = logging.getLogger(__name__)
 
 def run_pipeline_controller():
-    """
-    Handle POST request for combined pipeline.
-    ...
-    """
     try:
-        # --- START: ADDED DEBUG PRINT STATEMENTS ---
-        print("\n" + "="*50)
-        print("DEBUGGING RAW FORM DATA RECEIVED BY FLASK:")
-        print(f"  > request.form.get('videos'):   {request.form.get('videos')}")
-        print(f"  > request.form.get('articles'): {request.form.get('articles')}")
-        print(f"  > request.form.get('topics'):   {request.form.get('topics')}")
-        print(f"  > request.form.get('plan_text'): {request.form.get('plan_text')}")
-        print(f"  > request.files.getlist('files'): {request.files.getlist('file')}")
-        print("="*50 + "\n")
-        # --- END: ADDED DEBUG PRINT STATEMENTS ---
-        
-        # Get form fields
         videos_str = request.form.get('videos', '[]')
         articles_str = request.form.get('articles', '[]')
         plan_text = request.form.get('plan_text')
         topics_str = request.form.get('topics')
         level = request.form.get('level', 'beginner')
         style = request.form.get('style', 'concise')
-        
-        # Get uploaded files
         uploaded_files = request.files.getlist('files')
-        
-        # Validate at least one source is provided
+
         if not videos_str.strip() and not articles_str.strip() and not uploaded_files:
-            return jsonify({
-                "status": "error",
-                "message": "At least one source (videos, articles, or files) must be provided"
-            }), 400
-        
-        # Parse JSON strings
+            return jsonify({"status": "error", "message": "At least one source (videos, articles, or files) must be provided"}), 400
+
         try:
             videos = json.loads(videos_str) if videos_str.strip() else []
             articles = json.loads(articles_str) if articles_str.strip() else []
             topics = json.loads(topics_str) if topics_str else []
         except json.JSONDecodeError as e:
-            return jsonify({
-                "status": "error",
-                "message": f"Invalid JSON format: {str(e)}"
-            }), 400
-        
-        # Validate required fields
+            return jsonify({"status": "error", "message": f"Invalid JSON format: {str(e)}"}), 400
+
         if not plan_text:
-            return jsonify({
-                "status": "error",
-                "message": "Missing required field: plan_text"
-            }), 400
-        
+            return jsonify({"status": "error", "message": "Missing required field: plan_text"}), 400
         if not topics or not isinstance(topics, list):
-            return jsonify({
-                "status": "error",
-                "message": "topics must be a non-empty list"
-            }), 400
-        
-        # Validate list types
-        if not isinstance(videos, list):
-            return jsonify({
-                "status": "error",
-                "message": "videos must be a list"
-            }), 400
-        
-        if not isinstance(articles, list):
-            return jsonify({
-                "status": "error",
-                "message": "articles must be a list"
-            }), 400
-        
-        logger.info(f"Processing combined sources:")
-        logger.info(f"  Videos: {len(videos)}")
-        logger.info(f"  Articles: {len(articles)}")
-        logger.info(f"  Files: {len(uploaded_files)}")
-        logger.info(f"Plan: {plan_text}")
-        logger.info(f"Topics: {topics}")
-        logger.info(f"Level: {level}, Style: {style}")
-        
-        # Build sources dictionary
-        sources = {
-            "videos": videos,
-            "articles": articles,
-            "files": uploaded_files  # Pass FileStorage objects directly
-        }
-        
-        # Call the main pipeline function
-        result = run_pipeline(
-            sources=sources,
-            plan_text=plan_text,
-            topics=topics,
-            level=level,
-            style=style
-        )
-        
+            return jsonify({"status": "error", "message": "topics must be a non-empty list"}), 400
+
+        sources = {"videos": videos, "articles": articles, "files": uploaded_files}
+        result = run_pipeline(sources=sources, plan_text=plan_text, topics=topics, level=level, style=style)
+
+        # --- Extract PPT path if present ---
+        ppt_filename = None
+        if result and isinstance(result, dict):
+            full_ppt_path = result.get("_ppt_path") or result.get("ppt_path")
+            if full_ppt_path:
+                try:
+                    ppt_filename = Path(full_ppt_path).name
+                except Exception:
+                    ppt_filename = str(full_ppt_path).split("/")[-1].split("\\")[-1]
+
         return jsonify({
             "status": "success",
-            "data": result
+            "data": result,
+            "ppt_filename": ppt_filename,
         }), 200
-        
+
     except ValueError as e:
         logger.error(f"Validation error: {str(e)}")
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 400
-        
+        return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
         logger.error(f"Pipeline error: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({
-            "status": "error",
-            "message": f"Pipeline failed: {str(e)}"
-        }), 500
+        import traceback; logger.error(traceback.format_exc())
+        return jsonify({"status": "error", "message": f"Pipeline failed: {str(e)}"}), 500

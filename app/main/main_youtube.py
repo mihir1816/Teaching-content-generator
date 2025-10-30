@@ -115,10 +115,17 @@ def run_pipeline(
     except Exception as e:
         print(f"    PPT generation failed: {str(e)}")
         ppt_path = None
-
+    try:
+        result["_ppt_path"] = str(ppt_path) if ppt_path is not None else None
+    except Exception:
+        # If result is not a dict for some reason, skip attaching
+        pass
     _save_json(result, out_dir / f"{video_id}_results.json")
     print(f"    results saved -> {out_dir / (video_id + '_results.json')}")
     print(">>> Done.")
+    # Return the result so controllers can extract ppt filename and other metadata
+    return result
+
 
 def _parse_args():
     p = argparse.ArgumentParser(description="YouTube RAG pipeline (Gemini) using a provided plan string.")
