@@ -124,8 +124,51 @@ An intelligent teaching assistant that transforms any learning resource into com
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
+│              PLAN GENERATION (Google Gemini)                     │
+│  • User inputs topic name and description                        │
+│  • LLM generates content plan/outline                            │
+│  • Model: gemini-2.5-flash                                       │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   USER APPROVAL GATE                             │
+│                                                                   │
+│    ┌─────────────┐              ┌─────────────┐                │
+│    │   Display   │              │   User      │                │
+│    │   Plan to   │─────────────▶│   Reviews   │                │
+│    │   User      │              │   & Decides │                │
+│    └─────────────┘              └──────┬──────┘                │
+│                                         │                         │
+│                        ┌────────────────┴──────────────┐         │
+│                        │                                │         │
+│                  Not Approved                      Approved      │
+│                        │                                │         │
+│                        ▼                                ▼         │
+│              ┌──────────────────┐           ┌──────────────────┐│
+│              │  User Inputs     │           │  Proceed to      ││
+│              │  Changes/        │───┐       │  Query           ││
+│              │  Modifications   │   │       │  Generation      ││
+│              └──────────────────┘   │       └────────┬─────────┘│
+│                                      │                │          │
+│                                      │                │          │
+└──────────────────────────────────────┼────────────────┼──────────┘
+                                       │                │
+                                       └────────┐       │
+                                                │       │
+                                                ▼       │
+                                        ┌─────────────┐ │
+                                        │ Regenerate  │ │
+                                        │ Plan with   │ │
+                                        │ Changes     │ │
+                                        └──────┬──────┘ │
+                                               │        │
+                                               └────────┘
+                                                        │
+                                                        ▼
+┌─────────────────────────────────────────────────────────────────┐
 │           QUERY GENERATION (Google Gemini)                       │
-│  • Generates 8 diverse retrieval queries from topic/plan         │
+│  • Generates 8 diverse retrieval queries from approved plan      │
 │  • Mix of conceptual, how-to, and comparison queries            │
 │  • Model: gemini-2.5-flash                                       │
 └──────────────────────────────┬──────────────────────────────────┘
