@@ -16,7 +16,7 @@ except Exception as e:
 # =========================
 # System instruction
 # =========================
-_SYSTEM_PROMPT = """You are “Curriculum Planner,” an expert pedagogy designer.
+_SYSTEM_PROMPT = """You are "Curriculum Planner," an expert pedagogy designer.
 Create practical, classroom-ready content plans that are clear, structured, and tailored to the audience level.
 
 Principles:
@@ -24,7 +24,6 @@ Principles:
 - Use only the information provided by the teacher (topics + optional description).
 - If something is unclear or unspecified, choose sensible defaults rather than asking follow-ups.
 - Output MUST be valid JSON matching the requested schema, no extra text.
-- Ensure subtopic weights sum to exactly 100 (we’ll also normalize on our side if needed).
 """
 
 
@@ -33,27 +32,15 @@ Principles:
 # =========================
 _SCHEMA = """Return JSON ONLY with this schema:
 {
-  "level": "beginner|intermediate|advanced",
-  "style": "concise|detailed|exam-prep",
-  "language": "string",
-  "topics": ["string", "..."],
-  "planner_notes": "string",                 
-  "overall_objectives": ["string", "..."],   
+  "topic": "string",
+  "objectives": ["string", "..."],   
   "subtopics": [
     {
       "title": "string",
-      "weight": 0,                           
       "learning_outcomes": ["string", "..."],
-      "key_terms": ["string", "..."],
-      "suggested_examples": ["string", "..."],
-      "suggested_questions": 0,              
-      "estimated_time_minutes": 0            
+      "suggested_examples": ["string", "..."]
     }
-  ],
-  "assessment_strategy": {
-    "format": ["mcqs", "short-answer", "applied-task"],
-    "notes": "string"
-  }
+  ]
 }
 """
 
@@ -66,18 +53,15 @@ STYLE: {style}
 LANGUAGE: {language}
 
 TOPICS:
-{topics_block}
+{topic}
 
 TEACHER NOTES (optional):
 {desc_block}
 
 INSTRUCTIONS:
-- Create a coherent content plan that covers ALL topics above.
-- Include 6–10 subtopics total for single-topic; for multiple topics, distribute fairly.
-- Each subtopic must have: title, weight %, learning outcomes, key terms, 1–3 suggested examples,
-  suggested_questions (count), and estimated_time_minutes.
-- Weights across all subtopics MUST sum to 100 in total.
-- Keep style and depth aligned to LEVEL and STYLE.
+- Create a coherent content plan that covers the topic above.
+- Include 6–10 subtopics.
+- Each subtopic must have: title, learning outcomes (2-4 items), and 1–3 suggested examples.
 - No citations, no references.
 """
 
@@ -85,13 +69,12 @@ INSTRUCTIONS:
 def _build_prompt(
     level: str,
     style: str,
-    topics: List[str],
+    topic: Union[str, List[str]], 
     language: str,
     description: Optional[str]
 ) -> str:
-    topics_block = "\n".join(f"- {t}" for t in topics)
     desc_block = (description or "").strip() or "none"
-    return f"{_PLAN_TEMPLATE.format(level=level, style=style, language=language, topics_block=topics_block, desc_block=desc_block)}\n\n{_SCHEMA}"
+    return f"{_PLAN_TEMPLATE.format(level=level, style=style, language=language, topic=topic, desc_block=desc_block)}\n\n{_SCHEMA}"
 
 
 # =========================
@@ -109,84 +92,49 @@ def _json_sanitize(s: str) -> Dict[str, Any]:
     raise ValueError("LLM did not return valid JSON.")
 
 
-def _coerce_int(x, default=0) -> int:
-    try:
-        return int(round(float(x)))
-    except Exception:
-        return default
-
-
-def _normalize_weights(plan: Dict[str, Any]) -> Dict[str, Any]:
-    subs = plan.get("subtopics") or []
-    if not isinstance(subs, list) or not subs:
-        return plan
-
-    weights = []
-    for s in subs:
-        w = _coerce_int(s.get("weight", 0), default=0)
-        w = max(0, w)
-        s["weight"] = w
-        weights.append(w)
-
-    total = sum(weights)
-    n = len(subs)
-
-    if total == 100:
-        return plan
-
-    if total == 0:
-        even = [100 // n] * n
-        remainder = 100 - sum(even)
-        for i in range(remainder):
-            even[i] += 1
-        for s, w in zip(subs, even):
-            s["weight"] = w
-        return plan
-
-    scaled = []
-    running = 0
-    for i, w in enumerate(weights):
-        if i < n - 1:
-            new_w = int(round(w * 100.0 / max(1, total)))
-            scaled.append(new_w)
-            running += new_w
-        else:
-            scaled.append(100 - running)
-
-    for s, w in zip(subs, scaled):
-        s["weight"] = w
-    return plan
-
-
 # =========================
 # Public API
 # =========================
 def generate_plan(
     level: str,
     style: str,
-    topics: Union[str, List[str]],
+    topics : Union[str, List[str]],
     description: Optional[str] = None,
     language: str = "en",
     model_name: Optional[str] = None
 ) -> Dict[str, Any]:
-    if isinstance(topics, str):
-        topics_list = [t.strip() for t in topics.split(",") if t.strip()] if ("," in topics) else [topics.strip()]
-    else:
-        topics_list = [t.strip() for t in topics if t and t.strip()]
-    if not topics_list:
-        raise ValueError("At least one topic is required.")
+    """
+    Generate a simple curriculum plan.
+    
+    Args:
+        level: beginner, intermediate, or advanced
+        style: concise, detailed, or exam-prep
+        topics: Topic to create plan for (string)
+        description: Optional teacher notes/description
+        language: Language code (default: "en")
+        model_name: Optional model override
+    
+    Returns:
+        Dictionary with simple structure:
+        {
+          "topic": "...",
+          "objectives": [...],
+          "subtopics": [...]
+        }
+    """
+    topic_str = topics.strip() if isinstance(topics, str) else " ".join(topics)
+    if not topic_str:
+        raise ValueError("Topic is required.")
 
     if not cfg.GOOGLE_API_KEY:
         raise RuntimeError("GOOGLE_API_KEY missing. Set it in your environment/.env.")
 
     genai.configure(api_key=cfg.GOOGLE_API_KEY)
 
-    # ✅ updated: no system_instruction in init
     model = genai.GenerativeModel(model_name or getattr(cfg, "LLM_MODEL_NAME", "gemini-2.5-flash"))
 
-    prompt = _build_prompt(level=level, style=style, topics=topics_list, language=language, description=description)
+    prompt = _build_prompt(level=level, style=style, topic=topic_str, language=language, description=description)
 
-    # ✅ updated: add system role inside generate_content
     resp = model.generate_content([
         {"role": "model", "parts": _SYSTEM_PROMPT},
         {"role": "user", "parts": prompt}
@@ -195,23 +143,15 @@ def generate_plan(
     raw = (resp.text or "").strip()
     data = _json_sanitize(raw)
 
-    data.setdefault("level", level)
-    data.setdefault("style", style)
-    data.setdefault("language", language)
-    data.setdefault("topics", topics_list)
-
-    data = _normalize_weights(data)
-
-    for s in data.get("subtopics") or []:
-        s["weight"] = _coerce_int(s.get("weight", 0), default=0)
-        s["suggested_questions"] = _coerce_int(s.get("suggested_questions", 0), default=0)
-        s["estimated_time_minutes"] = _coerce_int(s.get("estimated_time_minutes", 0), default=0)
+    # Ensure defaults
+    data.setdefault("topic", topic_str)  # fixed: use topic_str
+    data.setdefault("objectives", [])
+    data.setdefault("subtopics", [])
+    
+    # Normalize subtopics
+    for s in data.get("subtopics", []):
+        s.setdefault("title", "")
         s.setdefault("learning_outcomes", [])
-        s.setdefault("key_terms", [])
         s.setdefault("suggested_examples", [])
-
-    data.setdefault("planner_notes", "")
-    data.setdefault("overall_objectives", [])
-    data.setdefault("assessment_strategy", {"format": ["mcqs"], "notes": ""})
-
+    
     return data

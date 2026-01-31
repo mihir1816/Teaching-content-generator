@@ -8,7 +8,7 @@ PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY")        # for vector DB (la
 # ==== Models ====
 # LLM (for generator step later; we’re just recording intent here)
 LLM_PROVIDER = "google"
-LLM_MODEL_NAME = "gemini-2.5-flash"
+LLM_MODEL_NAME = "models/gemini-2.5-flash"
 
 # Embeddings (local + free)
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"  # SentenceTransformers

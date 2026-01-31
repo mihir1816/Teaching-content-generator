@@ -1,15 +1,30 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { GlassCard } from "@/components/ui/GlassCard";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { BookOpen, Loader2, FileText, Edit, Plus, X, Upload,Download } from "lucide-react";
+import {
+  Loader2,
+  FileText,
+  Edit,
+  Plus,
+  X,
+  Upload,
+  Download,
+  ChevronRight,
+  Sparkles,
+  Check,
+  Youtube,
+  Link as LinkIcon,
+  File as FileIcon,
+  Layers
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { apiService } from "@/services/api";
 import { toast } from "sonner";
+import { PlanViewer } from "@/components/PlanViewer";
 
 const Combined = () => {
   const navigate = useNavigate();
@@ -34,23 +49,6 @@ const Combined = () => {
   const addVideo = () => {
     setFormData({ ...formData, videos: [...formData.videos, ""] });
   };
-  const handleDownloadPPT = async () => {
-      if (!contentResult?.ppt_filename) {
-        toast.error("No PPT file available to download");
-        return;
-      }
-
-      setDownloadLoading(true);
-      try {
-        await apiService.downloadCombinedPPT(contentResult.ppt_filename);
-        toast.success("PPT downloaded successfully!");
-      } catch (error) {
-        toast.error("Failed to download PPT");
-        console.error(error);
-      } finally {
-        setDownloadLoading(false);
-      }
-    };
 
   const removeVideo = (index: number) => {
     const newVideos = formData.videos.filter((_, i) => i !== index);
@@ -99,6 +97,24 @@ const Combined = () => {
     }
   };
 
+  const handleDownloadPPT = async () => {
+    if (!contentResult?.ppt_filename) {
+      toast.error("No PPT file available to download");
+      return;
+    }
+
+    setDownloadLoading(true);
+    try {
+      await apiService.downloadCombinedPPT(contentResult.ppt_filename);
+      toast.success("PPT downloaded successfully!");
+    } catch (error) {
+      toast.error("Failed to download PPT");
+      console.error(error);
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
   const handleGeneratePlan = async () => {
     const validTopics = formData.topics.filter(t => t.trim());
     if (!validTopics.length) {
@@ -127,10 +143,11 @@ const Combined = () => {
 
   const handleEditPlan = async () => {
     const validTopics = formData.topics.filter(t => t.trim());
-  if (!validTopics.length) {
+    if (!validTopics.length) {
       toast.error("Please enter at least one topic");
       return;
     }
+
     if (!userEdits.trim()) {
       toast.error("Please enter your edits");
       return;
@@ -139,13 +156,12 @@ const Combined = () => {
     setPlanLoading(true);
     try {
       const result = await apiService.editPlan({
+        ...formData,
+        // Override topics to match API
         topics: validTopics.join(", "),
-        description: formData.description,
-        level: formData.level,
-        style: formData.style,
-        language: formData.language,
+        user_edits: userEdits,
       });
-      setPlanText(result.updated_plan || result.response || JSON.stringify(result));
+      setPlanText(result.plan || result.response || JSON.stringify(result));
       setUserEdits("");
       toast.success("Plan updated successfully!");
     } catch (error) {
@@ -164,7 +180,7 @@ const Combined = () => {
 
     const validVideos = formData.videos.filter(v => v.trim());
     const validArticles = formData.articles.filter(a => a.trim());
-    
+
     if (!validVideos.length && !validArticles.length && !formData.files.length) {
       toast.error("Please provide at least one source (video, article, or document)");
       return;
@@ -193,55 +209,55 @@ const Combined = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="container mx-auto px-4 py-4">
-          <nav className="flex items-center justify-between">
-            <button 
-              onClick={() => navigate("/")}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-            >
-              <BookOpen className="h-8 w-8 text-primary" />
-              <span className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-                EduSlide AI
-              </span>
-            </button>
-            <div className="flex items-center gap-4">
-              <Button variant="outline" onClick={() => navigate("/select")}>
-                Back
-              </Button>
-              <ThemeToggle />
-            </div>
-          </nav>
+    <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-12 pt-6">
+      {/* Page Header */}
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate("/select")}
+          className="rounded-full hover:bg-primary/10 hover:text-primary transition-colors"
+        >
+          <ChevronRight className="h-6 w-6 rotate-180" />
+        </Button>
+        <div>
+          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+            Combined Sources
+          </h1>
+          <p className="text-muted-foreground">
+            Generate comprehensive content using multiple sources.
+          </p>
         </div>
-      </header>
+      </div>
 
-      <main className="container mx-auto px-4 py-12">
-        <div className="max-w-4xl mx-auto space-y-8">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold mb-4">Combined Sources</h1>
-            <p className="text-lg text-muted-foreground">
-              Generate comprehensive content using multiple sources
-            </p>
-          </div>
+      <div className="grid gap-8 lg:grid-cols-[1fr,1.5fr]">
+        {/* Left Column: Form */}
+        <div className="space-y-6">
+          <GlassCard className="p-6 space-y-6 border-l-4 border-l-primary">
+            <h3 className="text-xl font-semibold flex items-center gap-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs">1</span>
+              Input Details
+            </h3>
 
-          <Card className="p-6 bg-card">
             <div className="space-y-6">
-              <div>
-                <Label>YouTube URLs (Optional)</Label>
+              {/* YouTube Section */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><Youtube className="h-4 w-4 text-red-500" /> YouTube URLs (Optional)</Label>
                 <div className="space-y-2">
                   {formData.videos.map((video, index) => (
                     <div key={index} className="flex gap-2">
                       <Input
-                        placeholder="https://www.youtube.com/watch?v=..."
+                        placeholder="https://youtube.com/..."
                         value={video}
                         onChange={(e) => updateVideo(index, e.target.value)}
+                        className="bg-white/50 dark:bg-black/20"
                       />
                       {formData.videos.length > 1 && (
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="icon"
                           onClick={() => removeVideo(index)}
+                          className="hover:text-destructive"
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -250,8 +266,9 @@ const Combined = () => {
                   ))}
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={addVideo}
-                    className="w-full"
+                    className="w-full border-dashed"
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     Add Video
@@ -259,21 +276,24 @@ const Combined = () => {
                 </div>
               </div>
 
-              <div>
-                <Label>Article URLs (Optional)</Label>
+              {/* Articles Section */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" /> Article URLs (Optional)</Label>
                 <div className="space-y-2">
                   {formData.articles.map((article, index) => (
                     <div key={index} className="flex gap-2">
                       <Input
-                        placeholder="https://example.com/article"
+                        placeholder="https://example.com/..."
                         value={article}
                         onChange={(e) => updateArticle(index, e.target.value)}
+                        className="bg-white/50 dark:bg-black/20"
                       />
                       {formData.articles.length > 1 && (
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="icon"
                           onClick={() => removeArticle(index)}
+                          className="hover:text-destructive"
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -282,8 +302,9 @@ const Combined = () => {
                   ))}
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={addArticle}
-                    className="w-full"
+                    className="w-full border-dashed"
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     Add Article
@@ -291,32 +312,36 @@ const Combined = () => {
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="files">Upload Documents (Optional)</Label>
-                <div className="mt-2">
-                  <Input
-                    id="files"
+              {/* Files Section */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><FileIcon className="h-4 w-4 text-yellow-500" /> Upload Documents (Optional)</Label>
+                <div className="border-2 border-dashed border-input hover:border-primary/50 transition-colors rounded-lg p-6 text-center cursor-pointer bg-white/50 dark:bg-black/20 relative">
+                  <input
                     type="file"
-                    accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.tiff"
-                    onChange={handleFileChange}
-                    className="cursor-pointer"
                     multiple
+                    onChange={handleFileChange}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    accept=".pdf,.docx,.txt"
                   />
-                  {formData.files.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {formData.files.map((file, index) => (
-                        <p key={index} className="text-sm text-muted-foreground flex items-center gap-2">
-                          <Upload className="h-4 w-4" />
-                          {file.name}
-                        </p>
-                      ))}
-                    </div>
-                  )}
+                  <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm font-medium">Click to upload or drag and drop</p>
+                  <p className="text-xs text-muted-foreground">PDF, DOCX, TXT</p>
                 </div>
+                {formData.files.length > 0 && (
+                  <div className="space-y-1">
+                    {formData.files.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between text-sm bg-muted/50 p-2 rounded">
+                        <span className="truncate">{file.name}</span>
+                        <span className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <div>
-                <Label>Topics *</Label>
+              {/* Topics Section */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Topics *</Label>
                 <div className="space-y-2">
                   {formData.topics.map((topic, index) => (
                     <div key={index} className="flex gap-2">
@@ -324,12 +349,14 @@ const Combined = () => {
                         placeholder="Enter a topic"
                         value={topic}
                         onChange={(e) => updateTopic(index, e.target.value)}
+                        className="bg-white/50 dark:bg-black/20"
                       />
                       {formData.topics.length > 1 && (
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="icon"
                           onClick={() => removeTopic(index)}
+                          className="hover:text-destructive"
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -338,8 +365,9 @@ const Combined = () => {
                   ))}
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={addTopic}
-                    className="w-full"
+                    className="w-full border-dashed"
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     Add Topic
@@ -347,22 +375,23 @@ const Combined = () => {
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="description">Description (Optional)</Label>
+              <div className="space-y-2">
+                <Label htmlFor="description">Context (Optional)</Label>
                 <Textarea
                   id="description"
                   placeholder="Additional context..."
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={4}
+                  rows={3}
+                  className="bg-white/50 dark:bg-black/20 resize-none"
                 />
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <Label>Level</Label>
                   <Select value={formData.level} onValueChange={(value) => setFormData({ ...formData, level: value })}>
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-white/50 dark:bg-black/20">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -373,10 +402,10 @@ const Combined = () => {
                   </Select>
                 </div>
 
-                <div>
+                <div className="space-y-2">
                   <Label>Style</Label>
                   <Select value={formData.style} onValueChange={(value) => setFormData({ ...formData, style: value })}>
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-white/50 dark:bg-black/20">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -388,9 +417,9 @@ const Combined = () => {
                 </div>
               </div>
 
-              <Button 
-                onClick={handleGeneratePlan} 
-                className="w-full bg-gradient-primary hover:opacity-90"
+              <Button
+                onClick={handleGeneratePlan}
+                className="w-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
                 disabled={planLoading}
               >
                 {planLoading ? (
@@ -400,219 +429,123 @@ const Combined = () => {
                   </>
                 ) : (
                   <>
-                    <FileText className="mr-2 h-4 w-4" />
+                    <Sparkles className="mr-2 h-4 w-4" />
                     Generate Plan
                   </>
                 )}
               </Button>
+
             </div>
-          </Card>
+          </GlassCard>
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-6">
+          {!planText && !contentResult && (
+            <GlassCard className="h-full min-h-[400px] flex flex-col items-center justify-center text-center p-8 border-dashed border-2 border-white/20 bg-white/5">
+              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                <Layers className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Ready to Transform</h3>
+              <p className="text-muted-foreground max-w-sm">
+                Add sources and topics to generate a comprehensive plan and presentation.
+              </p>
+            </GlassCard>
+          )}
 
           {planText && (
-            <Card className="p-6 bg-card space-y-6">
-              <div>
-                <h3 className="text-xl font-semibold mb-4">Generated Plan</h3>
-                <div className="p-4 bg-muted rounded-lg">
-                  {(() => {
-                    let plan;
-                    try {
-                      plan = typeof planText === "string" ? JSON.parse(planText) : planText;
-                    } catch {
-                      return <pre className="whitespace-pre-wrap text-sm">{planText}</pre>;
-                    }
-                    if (!plan || typeof plan !== "object") return <pre>{planText}</pre>;
-                    return (
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <span className="font-semibold">Level:</span> {plan.level}
-                          </div>
-                          <div>
-                            <span className="font-semibold">Style:</span> {plan.style}
-                          </div>
-                          <div>
-                            <span className="font-semibold">Language:</span> {plan.language}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="font-semibold">Topics:</span>
-                          <ul className="list-disc ml-6">
-                            {plan.topics?.map((t: string, i: number) => (
-                              <li key={i}>{t}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        {plan.planner_notes && (
-                          <div>
-                            <span className="font-semibold">Planner Notes:</span>
-                            <div className="bg-background rounded p-2 mt-1 text-sm">{plan.planner_notes}</div>
-                          </div>
-                        )}
-                        {plan.overall_objectives && (
-                          <div>
-                            <span className="font-semibold">Overall Objectives:</span>
-                            <ul className="list-disc ml-6">
-                              {plan.overall_objectives.map((obj: string, i: number) => (
-                                <li key={i}>{obj}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        {plan.subtopics && plan.subtopics.length > 0 && (
-                          <div>
-                            <span className="font-semibold">Subtopics:</span>
-                            <div className="space-y-4 mt-2">
-                              {plan.subtopics.map((sub: any, i: number) => (
-                                <Card key={i} className="p-4 bg-background border">
-                                  <div className="font-semibold text-lg mb-2">{sub.title}</div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                                    <div>
-                                      <span className="font-semibold">Weight:</span> {sub.weight}
-                                    </div>
-                                    <div>
-                                      <span className="font-semibold">Estimated Time:</span> {sub.estimated_time_minutes} min
-                                    </div>
-                                  </div>
-                                  {sub.learning_outcomes && (
-                                    <div>
-                                      <span className="font-semibold">Learning Outcomes:</span>
-                                      <ul className="list-disc ml-6">
-                                        {sub.learning_outcomes.map((lo: string, idx: number) => (
-                                          <li key={idx}>{lo}</li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  )}
-                                  {sub.key_terms && (
-                                    <div>
-                                      <span className="font-semibold">Key Terms:</span>
-                                      <ul className="list-disc ml-6">
-                                        {sub.key_terms.map((kt: string, idx: number) => (
-                                          <li key={idx}>{kt}</li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  )}
-                                  {sub.suggested_examples && (
-                                    <div>
-                                      <span className="font-semibold">Suggested Examples:</span>
-                                      <ul className="list-disc ml-6">
-                                        {sub.suggested_examples.map((ex: string, idx: number) => (
-                                          <li key={idx}>{ex}</li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  )}
-                                  <div>
-                                    <span className="font-semibold">Suggested Questions:</span> {sub.suggested_questions}
-                                  </div>
-                                </Card>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {plan.assessment_strategy && (
-                          <div>
-                            <span className="font-semibold">Assessment Strategy:</span>
-                            <div className="mt-2">
-                              <div>
-                                <span className="font-semibold">Format:</span>
-                                <ul className="list-disc ml-6">
-                                  {plan.assessment_strategy.format?.map((fmt: string, i: number) => (
-                                    <li key={i}>{fmt}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                              {plan.assessment_strategy.notes && (
-                                <div className="mt-1">
-                                  <span className="font-semibold">Notes:</span> {plan.assessment_strategy.notes}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
+            <GlassCard className="p-6 space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs">2</span>
+                  Review Plan
+                </h3>
+                <div className="text-xs font-mono bg-primary/10 text-primary px-2 py-1 rounded">PLANNING PHASE</div>
               </div>
 
-              <div>
-                <Label htmlFor="edits">Edit Plan (Optional)</Label>
-                <Textarea
-                  id="edits"
-                  placeholder="Describe your changes..."
-                  value={userEdits}
-                  onChange={(e) => setUserEdits(e.target.value)}
-                  rows={4}
-                />
-                <Button 
-                  onClick={handleEditPlan} 
-                  className="mt-4 bg-accent hover:opacity-90"
-                  disabled={planLoading || !userEdits.trim()}
+              <div className="p-4 bg-muted/50 rounded-lg border border-white/10 max-h-[600px] overflow-y-auto">
+                <PlanViewer planData={planText} />
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-white/10">
+                <div className="space-y-2">
+                  <Label htmlFor="edits" className="text-xs uppercase tracking-wider text-muted-foreground">Refine Plan (Optional)</Label>
+                  <div className="flex gap-2">
+                    <Textarea
+                      id="edits"
+                      placeholder="e.g., Add more focus on specific segments..."
+                      value={userEdits}
+                      onChange={(e) => setUserEdits(e.target.value)}
+                      rows={1}
+                      className="bg-white/50 dark:bg-black/20 resize-none min-h-[40px]"
+                    />
+                    <Button
+                      onClick={handleEditPlan}
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      disabled={planLoading || !userEdits.trim()}
+                    >
+                      {planLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Edit className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleGenerateContent}
+                  className="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:opacity-90 shadow-lg shadow-emerald-500/20"
+                  disabled={loading}
+                  size="lg"
                 >
-                  {planLoading ? (
+                  {loading ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Updating Plan...
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Creating Slides...
                     </>
                   ) : (
                     <>
-                      <Edit className="mr-2 h-4 w-4" />
-                      Update Plan
+                      <ChevronRight className="mr-2 h-5 w-5" />
+                      Approve & Generate Content
                     </>
                   )}
                 </Button>
               </div>
-
-              <Button 
-                onClick={handleGenerateContent} 
-                className="w-full bg-gradient-primary hover:opacity-90"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating Content...
-                  </>
-                ) : (
-                  "Generate Content"
-                )}
-              </Button>
-            </Card>
+            </GlassCard>
           )}
 
           {contentResult && (
-            <Card className="p-6 bg-card">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-semibold">Generated Content</h3>
-                  {contentResult.ppt_filename && (
-                    <Button
-                      onClick={handleDownloadPPT}
-                      disabled={downloadLoading}
-                      variant="outline"
-                    >
-                      {downloadLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Downloading...
-                        </>
-                      ) : (
-                        <>
-                          <Download className="mr-2 h-4 w-4" />
-                          Download PPT
-                        </>
-                      )}
-                    </Button>
-                  )}
+            <GlassCard className="p-6 space-y-6 border-green-500/20 bg-green-500/5 animate-in zoom-in-95 duration-500">
+              <div className="text-center space-y-2">
+                <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-2">
+                  <Check className="h-8 w-8 text-green-500" />
                 </div>
-              <div className="p-4 bg-muted rounded-lg whitespace-pre-wrap">
-                {JSON.stringify(contentResult, null, 2)}
+                <h3 className="text-2xl font-bold text-green-500">Generation Complete!</h3>
+                <p className="text-muted-foreground">Your presentation is ready for download.</p>
               </div>
-            </Card>
+
+              {contentResult.ppt_filename && (
+                <Button
+                  onClick={handleDownloadPPT}
+                  disabled={downloadLoading}
+                  className="w-full h-12 text-lg bg-green-600 hover:bg-green-700 shadow-xl shadow-green-600/20"
+                >
+                  {downloadLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-5 w-5" />
+                      Download PowerPoint (.pptx)
+                    </>
+                  )}
+                </Button>
+              )}
+            </GlassCard>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 };

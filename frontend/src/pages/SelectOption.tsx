@@ -1,7 +1,5 @@
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { BookOpen, FileText, Video, Link as LinkIcon, Upload, Layers } from "lucide-react";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { FileText, Video, Link as LinkIcon, Upload, Layers, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const SelectOption = () => {
@@ -11,99 +9,89 @@ const SelectOption = () => {
     {
       id: "topic",
       title: "Topic Only",
-      description: "Generate content from just a topic name",
+      description: "Generate comprehensive content from just a simple topic name.",
       icon: FileText,
       path: "/generate/topic",
+      gradient: "from-blue-500 to-cyan-500",
     },
     {
       id: "youtube",
-      title: "YouTube + Topic",
-      description: "Combine YouTube videos with your topic",
+      title: "YouTube Content",
+      description: "Convert any YouTube video into educational slides.",
       icon: Video,
       path: "/generate/youtube",
+      gradient: "from-red-500 to-orange-500",
     },
     {
       id: "article",
-      title: "Article + Topic",
-      description: "Extract insights from online articles",
+      title: "Article Analysis",
+      description: "Turn articles and blog posts into structured teaching material.",
       icon: LinkIcon,
       path: "/generate/article",
+      gradient: "from-green-500 to-emerald-500",
     },
     {
       id: "document",
       title: "Document Upload",
-      description: "Upload PDFs, DOCX, or images",
+      description: "Upload your PDFs or Docs to generate specific content.",
       icon: Upload,
       path: "/generate/document",
+      gradient: "from-purple-500 to-pink-500",
     },
     {
       id: "combined",
-      title: "All Sources Combined",
-      description: "Use multiple sources for comprehensive content",
+      title: "Combined Sources",
+      description: "The most powerful mode. Combine vectors for maximum depth.",
       icon: Layers,
       path: "/generate/combined",
+      gradient: "from-amber-500 to-yellow-500",
     },
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border">
-        <div className="container mx-auto px-4 py-4">
-          <nav className="flex items-center justify-between">
-            <button 
-              onClick={() => navigate("/")}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+    <div className="space-y-12">
+      <div className="text-center space-y-4 pt-8">
+        <h1 className="text-4xl sm:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
+          Choose Content Source
+        </h1>
+        <p className="text-lg text-muted-foreground max-w-xl mx-auto">
+          Select how you would like to generate your presentation today.
+        </p>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
+        {options.map((option) => {
+          const Icon = option.icon;
+          return (
+            <GlassCard
+              key={option.id}
+              className="p-8 group cursor-pointer relative overflow-hidden"
+              onClick={() => navigate(option.path)}
             >
-              <BookOpen className="h-8 w-8 text-primary" />
-              <span className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-                EduSlide AI
-              </span>
-            </button>
-            <ThemeToggle />
-          </nav>
-        </div>
-      </header>
+              <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${option.gradient} opacity-10 blur-3xl rounded-full group-hover:opacity-20 transition-opacity`} />
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-12">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold mb-4">
-              Choose Your Content Source
-            </h1>
-            <p className="text-lg text-muted-foreground">
-              Select how you'd like to generate your presentation content
-            </p>
-          </div>
+              <div className="space-y-6 relative">
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${option.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                  <Icon className="h-7 w-7 text-white" />
+                </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {options.map((option) => {
-              const Icon = option.icon;
-              return (
-                <Card
-                  key={option.id}
-                  className="p-6 bg-card border-border hover:border-primary transition-all duration-300 hover:shadow-lg hover:shadow-primary/20 cursor-pointer group"
-                  onClick={() => navigate(option.path)}
-                >
-                  <div className="space-y-4">
-                    <div className="h-14 w-14 rounded-lg bg-gradient-primary flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Icon className="h-7 w-7 text-primary-foreground" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">{option.title}</h3>
-                      <p className="text-muted-foreground">{option.description}</p>
-                    </div>
-                    <Button className="w-full bg-gradient-primary hover:opacity-90 transition-opacity">
-                      Select
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </main>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-semibold group-hover:text-primary transition-colors">
+                    {option.title}
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    {option.description}
+                  </p>
+                </div>
+
+                <div className="flex items-center text-sm font-medium text-primary opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-10px] group-hover:translate-x-0">
+                  Select Mode <ArrowRight className="ml-2 h-4 w-4" />
+                </div>
+              </div>
+            </GlassCard>
+          );
+        })}
+      </div>
     </div>
   );
 };
