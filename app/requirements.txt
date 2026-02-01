@@ -1,5 +1,5 @@
-Flask
-python-dotenv
+Flask>=3.0.0
+python-dotenv>=1.0.0
 requests
 translators
 
@@ -18,12 +18,13 @@ numpy
 
 # (Generator later) Gemini via LangChain
 langchain-google-genai
-google-generativeai
+google-genai
 
 # Vector DB later (optional, keep for pipeline)
 pinecone
 
-flask-cors
+flask-cors>=4.0.0
+gunicorn>=21.2.0
 
 # Web scraping for articles
 langchain-community

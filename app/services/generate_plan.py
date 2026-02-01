@@ -6,10 +6,10 @@ import app.config as cfg
 
 # Gemini SDK
 try:
-    import google.generativeai as genai
+    import google.genai as genai
 except Exception as e:
     raise ImportError(
-        "google-generativeai is required. Install it with:\n  pip install google-generativeai"
+        "google-genai is required. Install it with:\n  pip install google-genai"
     ) from e
 
 
