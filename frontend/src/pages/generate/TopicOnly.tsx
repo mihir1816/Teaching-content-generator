@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/select";
 import {
   Loader2,
-  FileText,
   Edit,
   Download,
   Sparkles,

@@ -5,7 +5,6 @@ import {
     AccordionTrigger
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { GlassCard } from "@/components/ui/GlassCard";
 import {
     BookOpen,
@@ -16,8 +15,7 @@ import {
     GraduationCap,
     Brain,
     CheckCircle2,
-    List,
-    FileText
+    List
 } from "lucide-react";
 
 interface PlanViewerProps {
