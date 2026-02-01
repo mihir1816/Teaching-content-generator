@@ -3,7 +3,7 @@ import sys
 # Add parent directory to path for imports to work
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, send_from_directory
+from flask import Flask
 from app.routes.plan_routes import plan_bp
 from app.routes.yt_pipeline_routes import yt_pipeline
 from flask_cors import CORS
@@ -14,7 +14,7 @@ from app.routes.file_upload_routes import file_upload_bp
 from app.routes.combined_routes import combined_pipeline
 load_dotenv()
 
-app = Flask(__name__, static_folder='../frontend/dist')
+app = Flask(__name__)
 CORS(app) 
 
 # Register blueprints (routes)
@@ -26,19 +26,9 @@ app.register_blueprint(file_upload_bp, url_prefix="/api/file_upload")
 app.register_blueprint(combined_pipeline, url_prefix="/api/combined_pipeline")
 
 
-
-@app.route("/api/health", methods=["GET"])
+@app.route("/", methods=["GET"])
 def home():
-    return {"message": "🚀 Teaching Content Generator API Running"}
-
-# Serve React frontend
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve(path):
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    else:
-        return send_from_directory(app.static_folder, 'index.html')
+    return {"message": "🚀 Teaching Content Generator API Running", "status": "healthy"}
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
